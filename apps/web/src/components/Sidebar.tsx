@@ -204,6 +204,7 @@ import {
   type SidebarSection,
   resolveSidebarRowThreadId,
 } from "./Sidebar.logic";
+import { automationThreadKeys, automationThreadNeedsYou } from "./Sidebar.automations";
 import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
@@ -316,6 +317,8 @@ const EMPTY_THREADS: readonly EnvironmentThreadShell[] = [];
 
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
+// Fork: replaced by the scheduled-task join in the shelf work.
+const NO_AUTOMATION_THREAD_KEYS = automationThreadKeys(new Map());
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
@@ -347,6 +350,8 @@ interface SidebarThreadPartitionInput {
   // on the clock, so the minute tick, the precise snooze-wake tick and the inbox
   // tracker's expiry version are inputs: a new key repartitions.
   readonly clockKey: string;
+  /** Fork: keys of threads a scheduled task sends into (see Sidebar.automations.ts). */
+  readonly automationThreadKeys: ReadonlySet<string>;
 }
 
 function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -466,6 +471,7 @@ function useSidebarThreads(input: {
     workingShelfEnabled,
     sortActiveBySend: folderGroups !== null,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
+    automationThreadKeys: NO_AUTOMATION_THREAD_KEYS,
   });
 
   const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
@@ -600,6 +606,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
+    automationThreadKeys,
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
@@ -614,6 +621,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
       : active;
   const snoozed: EnvironmentThreadShell[] = [];
   const settled: EnvironmentThreadShell[] = [];
+  const automations: EnvironmentThreadShell[] = [];
   const draggable = new Set<string>();
   const activeReorderable = new Set<string>();
   for (const thread of visible) {
@@ -645,14 +653,18 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         snoozed: configLoaded && effectiveSnoozed(thread, { now: preciseNow }),
         settled: configLoaded && thread.settledOverride === "settled",
         pinned: thread.pinnedAt != null,
+        automation: automationThreadKeys.has(threadKey),
+        automationNeedsYou: automationThreadNeedsYou(thread),
       });
       (section === "snoozed"
         ? snoozed
-        : section === "settled"
-          ? settled
-          : section === "pinned"
-            ? pinned
-            : inbox(thread)
+        : section === "automations"
+          ? automations
+          : section === "settled"
+            ? settled
+            : section === "pinned"
+              ? pinned
+              : inbox(thread)
       ).push(thread);
     }
   }
@@ -689,6 +701,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         firstValidTimestampMs(right.snoozedUntil ?? null),
     ),
     settledThreads: sortSettledThreads(settled),
+    automationThreads: sortThreadsForSidebar(automations),
     visibleThreads: visible,
     snoozeNow: preciseNow,
   };

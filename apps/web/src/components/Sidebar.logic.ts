@@ -164,12 +164,21 @@ export const animateSidebarLayoutChanges: AnimateLayoutChanges = (args) =>
 
 // Snoozed rows cannot accept drops without a wake time. Working rows only drag out as chat context.
 
-export type SidebarSection = "pinned" | "active" | "working" | "snoozed" | "settled";
+export type SidebarSection =
+  | "pinned"
+  | "active"
+  | "working"
+  | "automations"
+  | "snoozed"
+  | "settled";
 
 export function resolveSidebarThreadSection(input: {
   readonly snoozed: boolean;
   readonly settled: boolean;
   readonly pinned: boolean;
+  // Fork: bound to a scheduled task, and whether it currently needs the user.
+  readonly automation?: boolean;
+  readonly automationNeedsYou?: boolean;
 }): SidebarSection {
   if (input.snoozed) return "snoozed";
   if (input.settled) return "settled";
@@ -185,6 +194,7 @@ export type SidebarListMarker =
   | "settled-placeholder"
   | "pinned-divider"
   | "working-header"
+  | "automations-header"
   | "snoozed-header"
   | "settled-header";
 
@@ -230,7 +240,7 @@ export function resolveSidebarDropTarget(
   const moved = items.filter((_, index) => index !== activeIndex);
   moved.splice(overIndex, 0, items[activeIndex]!);
   const section = sectionAtSidebarSlot(moved, overIndex);
-  if (section === "working" || section === "snoozed") return null;
+  if (section === "working" || section === "automations" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
   let currentSection: SidebarSection = "pinned";

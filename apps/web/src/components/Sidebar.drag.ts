@@ -118,6 +118,7 @@ export function createSidebarSortingStrategy(input: {
       pinned: [],
       active: [],
       working: [],
+      automations: [],
       snoozed: [],
       settled: [],
     };
