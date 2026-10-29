@@ -225,7 +225,8 @@ export function startThreadNotifications(
     entry.gate.retain(new Set(next.keys()));
     for (const [prior, state] of changed) {
       entry.gate.observe(state.thread.id, prior, state, {
-        archived: state.thread.archivedAt !== null,
+        // Muted threads stay tracked like archived ones, so unmuting never replays old alerts.
+        archived: state.thread.archivedAt !== null || state.raw.mutedAt != null,
         quiet: state.raw.latestRunStopRequested === true,
       });
     }

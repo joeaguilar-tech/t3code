@@ -12,7 +12,7 @@ export type ThreadListProvider = Pick<
   "instanceId" | "driver" | "enabled" | "displayName" | "accentColor" | "iconUrl"
 >;
 
-const capabilityKeys = ["threadAutoSettleOptOut"] as const;
+const capabilityKeys = ["threadAutoSettleOptOut", "threadMute"] as const;
 
 function selectEnvironment(config: ServerConfig) {
   return {
@@ -60,6 +60,7 @@ function collectEnvironments(environments: ReadonlyMap<EnvironmentId, ListEnviro
   // Every protocol-2 server supports these thread actions; they only wait for its config.
   const loadedEnvironmentIds = new Set<EnvironmentId>();
   const autoSettleOptOutEnvironmentIds = new Set<EnvironmentId>();
+  const muteEnvironmentIds = new Set<EnvironmentId>();
   const snoozePresetsByEnvironmentId = new Map<EnvironmentId, ListEnvironment["snoozePresets"]>();
   for (const [id, { providers, machineKind, capabilities, snoozePresets }] of environments) {
     providersByEnvironmentId.set(id, providers);
@@ -67,6 +68,7 @@ function collectEnvironments(environments: ReadonlyMap<EnvironmentId, ListEnviro
     machineByEnvironmentId.set(id, machineKind);
     loadedEnvironmentIds.add(id);
     if (capabilities.threadAutoSettleOptOut === true) autoSettleOptOutEnvironmentIds.add(id);
+    if (capabilities.threadMute === true) muteEnvironmentIds.add(id);
   }
   return {
     providersByEnvironmentId,
@@ -75,6 +77,7 @@ function collectEnvironments(environments: ReadonlyMap<EnvironmentId, ListEnviro
     snoozeEnvironmentIds: loadedEnvironmentIds,
     pinningEnvironmentIds: loadedEnvironmentIds,
     autoSettleOptOutEnvironmentIds,
+    muteEnvironmentIds,
     pinReorderEnvironmentIds: loadedEnvironmentIds,
     activeReorderEnvironmentIds: loadedEnvironmentIds,
     titleRegenerationEnvironmentIds: loadedEnvironmentIds,

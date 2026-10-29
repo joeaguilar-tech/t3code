@@ -472,6 +472,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.snooze":
     case "thread.unsnooze":
     case "thread.auto-settle.set":
+    case "thread.mute.set":
     case "thread.pin":
     case "thread.unpin":
     case "thread.pin.reorder":
@@ -2804,6 +2805,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.snooze"
           | "thread.unsnooze"
           | "thread.auto-settle.set"
+          | "thread.mute.set"
           | "thread.pin"
           | "thread.unpin"
           | "thread.pin.reorder"
@@ -2841,6 +2843,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         commandType: command.type,
         cause: `Thread ${command.threadId} is deleted.`,
       });
+    }
+    // A repeated unmute must not move the relay's alert cutoff past work that
+    // already finished, so a mute that changes nothing emits nothing.
+    if (command.type === "thread.mute.set" && command.muted === (thread.mutedAt != null)) {
+      return;
     }
     if (
       command.type === "thread.pull-request.watch" &&
@@ -3294,6 +3301,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: unchanged ? thread.updatedAt : now,
           };
         }
+        // Muting changes delivery, not activity, so it keeps updatedAt.
+        case "thread.mute.set":
+          return {
+            ...thread,
+            mutedAt: command.muted ? now : null,
+          };
         case "thread.pin": {
           const alreadyPinned = thread.pinnedAt != null;
           const promotes = thread.settledOverride === "settled" || thread.snoozedUntil != null;
@@ -3688,6 +3701,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return "thread.unsnoozed" as const;
         case "thread.auto-settle.set":
           return "thread.auto-settle-set" as const;
+        case "thread.mute.set":
+          return "thread.mute-set" as const;
         case "thread.pin":
           return "thread.pinned" as const;
         case "thread.unpin":
@@ -12456,6 +12471,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.snooze":
       case "thread.unsnooze":
       case "thread.auto-settle.set":
+      case "thread.mute.set":
       case "thread.pin":
       case "thread.unpin":
       case "thread.pin.reorder":
@@ -12813,6 +12829,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           command.type === "thread.background-work.settle" ||
           command.type === "thread.stop" ||
           command.type === "subagent.stop" ||
+          command.type === "thread.mute.set" ||
           // Closing a share again, or after it ended, is not an error.
           command.type === "thread.guest-share.close",
         (_planned) =>
