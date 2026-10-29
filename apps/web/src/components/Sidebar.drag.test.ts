@@ -220,6 +220,26 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
+  it.each([false, true])(
+    "preserves the Automations shelf during active reordering (expanded: %s)",
+    (expanded) => {
+      const items = [
+        pinnedHeader,
+        divider,
+        thread("a1", "active"),
+        thread("a2", "active"),
+        marker("automations-header"),
+        ...(expanded ? [thread("auto", "automations")] : []),
+        settledHeader,
+        thread("s", "settled"),
+      ];
+      const result = preview({ items, settledOrder: ["s"], settledExpanded: true }, "a1", "a2");
+      expect(result.get(sidebarMarkerId("automations-header"))).toEqual(stationary);
+      if (expanded) expect(result.get("auto")).toEqual(stationary);
+      expect(result.get(sidebarMarkerId("settled-header"))).toEqual(stationary);
+    },
+  );
+
   it.each([
     ["a2", "a1"],
     ["p", "a1"],
