@@ -181,6 +181,8 @@ export function resolveSidebarThreadSection(input: {
   readonly automationNeedsYou?: boolean;
 }): SidebarSection {
   if (input.snoozed) return "snoozed";
+  if (input.automation && input.pinned) return "pinned";
+  if (input.automation && !input.automationNeedsYou) return "automations";
   if (input.settled) return "settled";
   if (input.pinned) return "pinned";
   return "active";
