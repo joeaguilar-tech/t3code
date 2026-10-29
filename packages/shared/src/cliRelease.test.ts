@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  cliArchiveFileName,
+  cliArchiveTarCommand,
+  cliReleaseDownloadBaseUrl,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
   it("parses sha256sum output including binary-mode markers", () => {
@@ -38,5 +44,22 @@ describe("cliRelease", () => {
     expect(newestCliReleaseVersion(releases, "nightly")).toBe("1.2.4-nightly.20260912.7");
     expect(newestCliReleaseVersion(releases, "stable")).toBe("1.2.3");
     expect(newestCliReleaseVersion([{ tag_name: "v1.2.3" }], "preview")).toBeUndefined();
+  });
+
+  // Fork builds use patch Z*1000+100+n, so they fetch the upstream Z runtime.
+  it.each([
+    ["0.1.5100", "0.1.5"],
+    ["0.1.5103", "0.1.5"],
+    ["0.2.100", "0.2.0"],
+    ["0.1.5", "0.1.5"],
+    ["0.0.45", "0.0.45"],
+    ["0.1.6-nightly.20261029.3892", "0.1.6-nightly.20261029.3892"],
+  ])("downloads the upstream runtime for app version %s", (appVersion, upstream) => {
+    expect(cliReleaseDownloadBaseUrl(appVersion)).toBe(
+      `https://github.com/pingdotgg/t3code/releases/download/v${upstream}`,
+    );
+    expect(cliArchiveFileName(appVersion, "darwin-arm64")).toBe(
+      `t3-${upstream}-darwin-arm64.tar.gz`,
+    );
   });
 });

@@ -1,18 +1,19 @@
-# Fork-only: when pingdotgg/t3code publishes a stable release, merge it into this
-# fork's main, check the mute feature, and publish a signed, notarized macOS build.
-# Installed apps update from these releases (GITHUB_REPOSITORY sets the feed).
+# Fork-only: release T3 Code (Joe) when main changes or pingdotgg/t3code publishes a
+# stable release. Upstream X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is
+# newer than the last and installed apps update from these releases (the feed comes
+# from GITHUB_REPOSITORY). packages/shared/src/forkVersion.ts maps it back for
+# runtime downloads.
 name: Fork release
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
-      tag:
-        description: Upstream release tag to build (default is the latest stable release)
-        required: false
       force:
-        description: Rebuild even if this fork already released the tag
+        description: Release even if main hasn't changed since the last release
         type: boolean
         default: false
 
@@ -31,9 +32,11 @@ env:
   KEEP_WORKFLOW: .github/workflows/fork-release.yml
 
 jobs:
-  release:
-    runs-on: macos-15
-    timeout-minutes: 120
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      skip: ${{ steps.plan.outputs.skip }}
     steps:
       - name: Disable upstream workflows
         env:
@@ -43,23 +46,38 @@ jobs:
             --jq ".workflows[] | select(.state == \"active\" and .path != \"$KEEP_WORKFLOW\") | .id" |
             while read -r id; do gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"; done
 
-      - name: Find upstream release
-        id: up
+      - name: Decide whether to release
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_TAG: ${{ inputs.tag }}
           FORCE: ${{ inputs.force }}
         run: |
-          tag="${INPUT_TAG:-$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)}"
+          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          if [[ "$FORCE" != "true" ]] && gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "$tag is already released."
+          tag_sha="$(gh api "repos/$UPSTREAM/commits/$tag" --jq .sha)"
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          # Fork networks share objects, so upstream SHAs resolve here. Unknown means merge.
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$tag_sha...$main_sha" --jq .status 2>/dev/null || echo unknown)"
+          last_tag="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
+          last_sha=""
+          if [[ -n "$last_tag" ]]; then
+            last_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$last_tag" --jq .sha 2>/dev/null || true)"
+          fi
+          echo "upstream $tag ($status vs main); main $main_sha; last release $last_tag ($last_sha)"
+          if [[ "$FORCE" != "true" && ( "$status" == "ahead" || "$status" == "identical" ) && "$main_sha" == "$last_sha" ]]; then
+            echo "Nothing new since $last_tag."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+  release:
+    needs: check
+    if: needs.check.outputs.skip != 'true'
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+    steps:
       - name: Check secrets
-        if: steps.up.outputs.skip != 'true'
         env:
           FORK_SYNC_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -80,7 +98,6 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
-        if: steps.up.outputs.skip != 'true'
         with:
           ref: main
           fetch-depth: 0
@@ -88,9 +105,6 @@ jobs:
 
       - name: Merge upstream release
         id: merge
-        if: steps.up.outputs.skip != 'true'
-        env:
-          TAG: ${{ steps.up.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
@@ -117,11 +131,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup-ci-deps
-        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true'
 
-      - name: Check mute feature
+      - name: Check fork features
         id: verify
-        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true'
         run: |
           set -o pipefail
           run() { echo "::group::$*"; "$@" 2>&1 | tee -a "$RUNNER_TEMP/verify.log"; local s=$?; echo "::endgroup::"; return $s; }
@@ -130,11 +144,13 @@ jobs:
           (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
           (cd packages/client-runtime && run vp test run src/state -t "mute|Mute") || ok=false
           (cd apps/web && run vp test run --project unit src/hooks src/components -t "mute|Mute") || ok=false
+          (cd apps/web && run vp test run --project unit src/components/Sidebar.automations.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts src/components/sidebar/automationTasksAtom.test.ts) || ok=false
+          (cd packages/shared && run vp test run src/cliRelease.test.ts) || ok=false
           if [[ "$ok" != true ]]; then
             {
               echo "blocked=true"
               echo "reason<<EOF"
-              echo "The merged code fails typecheck or the mute tests. Last output:"
+              echo "The merged code fails typecheck or the fork's tests. Last output:"
               echo
               echo '```'
               tail -n 60 "$RUNNER_TEMP/verify.log"
@@ -143,14 +159,34 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Choose version
+        id: version
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IFS=. read -r major minor patch <<< "${TAG#v}"
+          first=$((patch * 1000 + 100))
+          last=$((first + 899))
+          highest="$(gh release list -R "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' |
+            sed -nE "s/^v$major\\.$minor\\.([0-9]+)\$/\\1/p" |
+            awk -v lo="$first" -v hi="$last" '$1 >= lo && $1 <= hi' | sort -n | tail -n 1)"
+          next=$(( ${highest:-$((first - 1))} + 1 ))
+          if (( next > last )); then
+            echo "::error::No fork versions left for upstream $TAG"
+            exit 1
+          fi
+          echo "version=$major.$minor.$next" >> "$GITHUB_OUTPUT"
+          echo "Releasing $major.$minor.$next (upstream $TAG)"
+
       - name: Push main
-        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
         run: git push origin HEAD:main
 
       - name: Build signed macOS app
-        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
         env:
-          VERSION: ${{ steps.up.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
@@ -172,27 +208,24 @@ jobs:
           rm -f "$APPLE_API_KEY"
 
       - name: Publish release
-        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
         env:
           GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
-          TAG: ${{ steps.up.outputs.tag }}
-          VERSION: ${{ steps.up.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
           # A leftover tag would make the release point at its commit instead of ours.
-          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" 2>/dev/null || true
-          gh release create "$TAG" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
             --target "$(git rev-parse HEAD)" \
             --title "T3 Code (Joe) $VERSION" \
-            --notes "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) plus thread muting ([#16800](https://github.com/$UPSTREAM/pull/16800)). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
+            --notes "Based on upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
           gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"Fork sync blocked\" in:title" --json number --jq '.[].number' |
-            while read -r n; do gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "Released $TAG."; done
+            while read -r n; do gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "Released v$VERSION."; done
 
       - name: Report blocked sync
         if: steps.merge.outputs.blocked == 'true' || steps.verify.outputs.blocked == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.up.outputs.tag }}
           REASON: ${{ steps.merge.outputs.reason }}${{ steps.verify.outputs.reason }}
         run: |
           title="Fork sync blocked: $TAG"
