@@ -108,21 +108,17 @@ export function SidebarDragBoundary(props: {
 }
 
 export function SidebarSectionHeader(props: {
-  marker: "working-header" | "snoozed-header" | "settled-header";
+  marker: "working-header" | "automations-header" | "snoozed-header" | "settled-header";
   label: string;
   /** A muted trailing count. */
   count: number;
   className?: string;
+  unread?: boolean;
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
-  const shelf =
-    props.marker === "working-header"
-      ? "working"
-      : props.marker === "snoozed-header"
-        ? "snoozed"
-        : "settled";
+  const shelf = props.marker.replace("-header", "");
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -137,7 +133,18 @@ export function SidebarSectionHeader(props: {
         expanded={props.toggle.expanded}
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="font-normal tabular-nums">{props.count}</span>}
+        accessory={
+          <span className="flex items-center gap-2">
+            {props.unread ? (
+              <span
+                role="img"
+                aria-label="Unread threads"
+                className="size-1.5 rounded-full bg-primary"
+              />
+            ) : null}
+            <span className="font-normal tabular-nums">{props.count}</span>
+          </span>
+        }
       >
         {props.label}
       </CollapsibleSectionHeader>
