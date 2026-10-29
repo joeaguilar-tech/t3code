@@ -2,9 +2,27 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
-import { createSidebarAutomationTasksAtom } from "./automationTasksAtom";
+import {
+  createSidebarAutomationTasksAtom,
+  createSidebarAutomationThreadKeysAtom,
+} from "./automationTasksAtom";
 
 describe("sidebar automation subscriptions", () => {
+  it.each([false, true])("includes successful tasks while waiting: %s", (waiting) => {
+    const id = EnvironmentId.make("live");
+    const tasks = [{ threadId: ThreadId.make("bound") }];
+    const collected = createSidebarAutomationTasksAtom({
+      environmentsAtom: Atom.make([{ environmentId: id }]),
+      tasksAtom: () => Atom.make(AsyncResult.success({ tasks }, { waiting })),
+    });
+    const registry = AtomRegistry.make();
+    try {
+      expect(registry.get(collected).get(id)).toEqual(tasks);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it("collects each shown environment, updates tasks, and drops removed environments", () => {
     const first = EnvironmentId.make("first");
     const second = EnvironmentId.make("second");
@@ -37,6 +55,27 @@ describe("sidebar automation subscriptions", () => {
       expect(registry.get(collected).get(first)).toEqual([]);
       registry.set(environmentsAtom, [{ environmentId: second }]);
       expect([...registry.get(collected)]).toEqual([[second, tasks]]);
+    } finally {
+      release();
+      registry.dispose();
+    }
+  });
+
+  it("preserves membership identity across task metadata updates and changes it for bindings", () => {
+    const source = Atom.make([{ threadId: "first", lastRunAt: "before" }]);
+    const keys = createSidebarAutomationThreadKeysAtom(
+      source,
+      (tasks) => new Set(tasks.map((task) => task.threadId)),
+    );
+    const registry = AtomRegistry.make();
+    const release = registry.mount(keys);
+    try {
+      const initial = registry.get(keys);
+      registry.set(source, [{ threadId: "first", lastRunAt: "after" }]);
+      expect(registry.get(keys)).toBe(initial);
+      registry.set(source, [{ threadId: "second", lastRunAt: "after" }]);
+      expect(registry.get(keys)).not.toBe(initial);
+      expect([...registry.get(keys)]).toEqual(["second"]);
     } finally {
       release();
       registry.dispose();

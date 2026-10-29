@@ -189,6 +189,7 @@ import {
   resolveSidebarDropTarget,
   resolveSidebarDropVerb,
   resolveSidebarThreadSection,
+  resolveThreadLastVisitedAt,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
   shouldNavigateAfterThreadPark,
@@ -352,6 +353,7 @@ interface SidebarThreadPartitionInput {
   readonly clockKey: string;
   /** Fork: keys of threads a scheduled task sends into (see Sidebar.automations.ts). */
   readonly automationThreadKeys: ReadonlySet<string>;
+  readonly localThreadLastVisitedAtById: Readonly<Record<string, string | undefined>>;
 }
 
 function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -468,6 +470,7 @@ function useSidebarThreads(input: {
     settledTail.scopeKey === projectScopeKey ? settledTail.count : SETTLED_TAIL_INITIAL_COUNT;
 
   const automationThreadKeys = useAutomationThreadKeys();
+  const localThreadLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const partition = partitionSidebarThreads({
     threads,
     scopedProjectKeys,
@@ -478,6 +481,7 @@ function useSidebarThreads(input: {
     sortActiveBySend: folderGroups !== null,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
     automationThreadKeys,
+    localThreadLastVisitedAtById,
   });
 
   const {
@@ -628,6 +632,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     workingShelfEnabled,
     sortActiveBySend,
     automationThreadKeys,
+    localThreadLastVisitedAtById,
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
@@ -675,7 +680,14 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         settled: configLoaded && thread.settledOverride === "settled",
         pinned: thread.pinnedAt != null,
         automation: automationThreadKeys.has(threadKey),
-        automationNeedsYou: automationThreadNeedsYou(thread),
+        automationNeedsYou: automationThreadNeedsYou({
+          ...thread,
+          lastVisitedAt:
+            resolveThreadLastVisitedAt(
+              thread.lastVisitedAt,
+              localThreadLastVisitedAtById[threadKey],
+            ) ?? null,
+        }),
       });
       (section === "snoozed"
         ? snoozed

@@ -1140,6 +1140,17 @@ describe("Working shelf (beta)", () => {
       key,
       section,
     });
+    const itemsFor = (shelf: "working" | "automations") => [
+      marker("pinned-header"),
+      row("p1", "pinned"),
+      marker("pinned-divider"),
+      row("a1", "active"),
+      row("a2", "active"),
+      marker(`${shelf}-header`),
+      row("w1", shelf),
+      marker("settled-header"),
+      row("s1", "settled"),
+    ];
     it.each(["pinned", "active", "working", "snoozed", "settled"] as const)(
       "offers no drop action from %s into Automations",
       (from) => {
@@ -1149,17 +1160,7 @@ describe("Working shelf (beta)", () => {
     it.each(["working", "automations"] as const)(
       "never drops into the %s shelf, and keeps it out of the inbox order",
       (shelf) => {
-        const items = [
-          marker("pinned-header"),
-          row("p1", "pinned"),
-          marker("pinned-divider"),
-          row("a1", "active"),
-          row("a2", "active"),
-          marker(`${shelf}-header`),
-          row("w1", shelf),
-          marker("settled-header"),
-          row("s1", "settled"),
-        ];
+        const items = itemsFor(shelf);
         expect(resolveSidebarDropTarget(items, "a1", "w1")).toBeNull();
         expect(resolveSidebarDropTarget(items, "p1", "a2")).toEqual({
           section: "active",
@@ -1180,17 +1181,7 @@ describe("Working shelf (beta)", () => {
     ] as const)(
       "does not move a %s thread into %s when its reference drag ends in the sidebar",
       (shelf, section, overKey) => {
-        const items = [
-          marker("pinned-header"),
-          row("p1", "pinned"),
-          marker("pinned-divider"),
-          row("a1", "active"),
-          row("a2", "active"),
-          marker(`${shelf}-header`),
-          row("w1", shelf),
-          marker("settled-header"),
-          row("s1", "settled"),
-        ];
+        const items = itemsFor(shelf);
         const target = resolveSidebarDropTarget(items, "w1", overKey);
         expect(target?.section).toBe(section);
         expect(

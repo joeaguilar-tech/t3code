@@ -118,7 +118,14 @@ export function SidebarSectionHeader(props: {
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
-  const shelf = props.marker.replace("-header", "");
+  const shelf =
+    props.marker === "working-header"
+      ? "working"
+      : props.marker === "automations-header"
+        ? "automations"
+        : props.marker === "snoozed-header"
+          ? "snoozed"
+          : "settled";
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -134,16 +141,20 @@ export function SidebarSectionHeader(props: {
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
         accessory={
-          <span className="flex items-center gap-2">
-            {props.unread ? (
-              <span
-                role="img"
-                aria-label="Unread threads"
-                className="size-1.5 rounded-full bg-primary"
-              />
-            ) : null}
+          props.marker === "automations-header" ? (
+            <span className="flex items-center gap-2">
+              {props.unread ? (
+                <span
+                  role="img"
+                  aria-label="Unread threads"
+                  className="size-1.5 rounded-full bg-primary"
+                />
+              ) : null}
+              <span className="font-normal tabular-nums">{props.count}</span>
+            </span>
+          ) : (
             <span className="font-normal tabular-nums">{props.count}</span>
-          </span>
+          )
         }
       >
         {props.label}
