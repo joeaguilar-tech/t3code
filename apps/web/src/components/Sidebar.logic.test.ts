@@ -11,6 +11,7 @@ import {
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
   resolveSidebarRowThreadId,
+  resolveSidebarThreadSection,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveProjectStatusIndicator,
@@ -1446,4 +1447,67 @@ describe("resolveSidebarFolderDot", () => {
     expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
     expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
   });
+});
+
+describe("resolveSidebarThreadSection", () => {
+  it.each([
+    [false, false, "active"],
+    [false, true, "pinned"],
+    [true, false, "settled"],
+    [true, true, "settled"],
+  ] as const)(
+    "preserves ordinary ordering for settled=%s pinned=%s",
+    (settled, pinned, expected) => {
+      for (const automation of [undefined, false]) {
+        for (const automationNeedsYou of [undefined, false, true]) {
+          expect(
+            resolveSidebarThreadSection({
+              snoozed: false,
+              settled,
+              pinned,
+              ...(automation === undefined ? {} : { automation }),
+              ...(automationNeedsYou === undefined ? {} : { automationNeedsYou }),
+            }),
+          ).toBe(expected);
+          expect(
+            resolveSidebarThreadSection({
+              snoozed: true,
+              settled,
+              pinned,
+              ...(automation === undefined ? {} : { automation }),
+              ...(automationNeedsYou === undefined ? {} : { automationNeedsYou }),
+            }),
+          ).toBe("snoozed");
+        }
+      }
+    },
+  );
+
+  it.each([
+    [false, false, false, false, "automations"],
+    [false, true, false, false, "automations"],
+    [false, true, true, false, "pinned"],
+    [false, false, true, false, "pinned"],
+    [false, true, true, true, "pinned"],
+    [false, false, true, true, "pinned"],
+    [false, false, false, true, "active"],
+    [false, true, false, true, "settled"],
+    [true, false, false, false, "snoozed"],
+    [true, true, true, false, "snoozed"],
+    [true, false, false, true, "snoozed"],
+    [true, true, true, true, "snoozed"],
+  ] as const)(
+    "orders automation snoozed=%s settled=%s pinned=%s needsYou=%s",
+    (snoozed, settled, pinned, automationNeedsYou, expected) => {
+      expect(
+        resolveSidebarThreadSection({
+          snoozed,
+          settled,
+          pinned,
+          automation: true,
+          automationNeedsYou,
+        }),
+      ).toBe(expected);
+    },
+  );
 });
