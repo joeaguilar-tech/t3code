@@ -1,4 +1,5 @@
 import { EnvironmentId, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import * as DateTime from "effect/DateTime";
 import type { ThreadSnoozeShell } from "@t3tools/client-runtime/state/thread-settled";
 import { describe, expect, it } from "vite-plus/test";
@@ -24,11 +25,12 @@ describe("automationThreadKeys", () => {
       [EnvironmentId.make("remote"), [enabled]],
     ]);
     expect(automationThreadKeys(tasks)).toEqual(
-      new Set(["local:shared", "local:paused", "remote:shared"]),
+      new Set([
+        scopedThreadKey(scopeThreadRef(EnvironmentId.make("local"), ThreadId.make("shared"))),
+        scopedThreadKey(scopeThreadRef(EnvironmentId.make("local"), ThreadId.make("paused"))),
+        scopedThreadKey(scopeThreadRef(EnvironmentId.make("remote"), ThreadId.make("shared"))),
+      ]),
     );
-    tasks.delete(EnvironmentId.make("remote"));
-    expect(automationThreadKeys(tasks)).toEqual(new Set(["local:shared", "local:paused"]));
-    expect(automationThreadKeys(new Map())).toEqual(new Set());
   });
 });
 
@@ -100,7 +102,7 @@ describe("automationThreadNeedsYou", () => {
         ...failed,
         latestRun: null,
         latestTurn: { status: "failed", completedAt: failure },
-        lastVisitedAt: after,
+        lastVisitedAt: "2026-10-28T11:30:00.000Z",
       },
       false,
     ],

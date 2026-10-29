@@ -98,7 +98,7 @@ export function threadRaisedHandWhileSnoozed(shell: ThreadSnoozeShell): boolean 
 
 // V2 runtime.updatedAt includes metadata writes; prefer the failed run's completion.
 // Legacy sessions only expose the runtime timestamp.
-export function failureEdgeAt(shell: ThreadSnoozeShell): string | null | undefined {
+function failureEdgeAt(shell: ThreadSnoozeShell): string | null | undefined {
   const runtime = shell.runtime ?? shell.session ?? null;
   if (runtime?.status !== "error" && runtime?.status !== "failed") return undefined;
   const latestRun = shell.latestRun ?? shell.latestTurn ?? null;

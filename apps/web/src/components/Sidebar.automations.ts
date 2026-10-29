@@ -1,7 +1,7 @@
 import type { EnvironmentId, ScheduledTask } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
-  failureEdgeAt,
+  threadRaisedHandWhileSnoozed,
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
 
@@ -14,8 +14,9 @@ export function automationThreadKeys(
   const keys = new Set<string>();
   for (const [environmentId, tasks] of tasksByEnvironment) {
     for (const task of tasks) {
-      if (task.threadId != null)
+      if (task.threadId != null) {
         keys.add(scopedThreadKey(scopeThreadRef(environmentId, task.threadId)));
+      }
     }
   }
   return keys;
@@ -25,14 +26,6 @@ export function automationThreadKeys(
 export function automationThreadNeedsYou(
   shell: ThreadSnoozeShell & { readonly lastVisitedAt?: string | null },
 ): boolean {
-  if (shell.hasPendingApprovals || shell.hasPendingUserInput) return true;
-  if (shell.source?.pendingRuntimeRequest != null) return true;
-  if (shell.pendingSubagentRequest != null) return true;
-  if ((shell.pendingGuestMessageCount ?? 0) > 0) return true;
-  const failedAt = failureEdgeAt(shell);
-  return (
-    failedAt !== undefined &&
-    (shell.lastVisitedAt == null ||
-      (failedAt != null && Date.parse(failedAt) > Date.parse(shell.lastVisitedAt)))
-  );
+  // Reuse the snooze rule, with the last visit as the edge.
+  return threadRaisedHandWhileSnoozed({ ...shell, snoozedAt: shell.lastVisitedAt ?? null });
 }
