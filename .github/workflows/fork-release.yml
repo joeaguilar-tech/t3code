@@ -1,0 +1,204 @@
+# Fork-only: when pingdotgg/t3code publishes a stable release, merge it into this
+# fork's main, check the mute feature, and publish a signed, notarized macOS build.
+# Installed apps update from these releases (GITHUB_REPOSITORY sets the feed).
+name: Fork release
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream release tag to build (default is the latest stable release)
+        required: false
+      force:
+        description: Rebuild even if this fork already released the tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: pingdotgg/t3code
+  # Upstream workflows target infrastructure this fork doesn't have; keep them off.
+  KEEP_WORKFLOW: .github/workflows/fork-release.yml
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - name: Disable upstream workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --paginate \
+            --jq ".workflows[] | select(.state == \"active\" and .path != \"$KEEP_WORKFLOW\") | .id" |
+            while read -r id; do gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"; done
+
+      - name: Find upstream release
+        id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          tag="${INPUT_TAG:-$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          if [[ "$FORCE" != "true" ]] && gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$tag is already released."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check secrets
+        if: steps.up.outputs.skip != 'true'
+        env:
+          FORK_SYNC_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for name in FORK_SYNC_TOKEN CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_TEAM_ID; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          # An unsigned build can't update installed apps, so never publish one.
+          if (( ${#missing[@]} )); then
+            echo "::error::Missing secrets or variables: ${missing[*]}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.up.outputs.skip != 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+
+      - name: Merge upstream release
+        id: merge
+        if: steps.up.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.up.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/upstream/$TAG"
+          if git merge --no-edit -m "Merge upstream $TAG" "upstream/$TAG"; then exit 0; fi
+          # Only a measured number; upstream's value is fine for a build.
+          budget=apps/server/src/provider/agentContextBudget.json
+          if git diff --name-only --diff-filter=U | grep -qx "$budget"; then
+            git checkout --theirs "$budget" && git add "$budget"
+          fi
+          conflicts="$(git diff --name-only --diff-filter=U)"
+          if [[ -z "$conflicts" ]]; then
+            git commit --no-edit
+            exit 0
+          fi
+          git merge --abort
+          {
+            echo "blocked=true"
+            echo "reason<<EOF"
+            echo "Merging \`$TAG\` into \`main\` conflicts in:"
+            echo
+            echo "$conflicts" | sed 's/^/- `/; s/$/`/'
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup-ci-deps
+        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true'
+
+      - name: Check mute feature
+        id: verify
+        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true'
+        run: |
+          set -o pipefail
+          run() { echo "::group::$*"; "$@" 2>&1 | tee -a "$RUNNER_TEMP/verify.log"; local s=$?; echo "::endgroup::"; return $s; }
+          ok=true
+          run vp run typecheck || ok=false
+          (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
+          (cd packages/client-runtime && run vp test run src/state -t "mute|Mute") || ok=false
+          (cd apps/web && run vp test run --project unit src/hooks src/components -t "mute|Mute") || ok=false
+          if [[ "$ok" != true ]]; then
+            {
+              echo "blocked=true"
+              echo "reason<<EOF"
+              echo "The merged code fails typecheck or the mute tests. Last output:"
+              echo
+              echo '```'
+              tail -n 60 "$RUNNER_TEMP/verify.log"
+              echo '```'
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push main
+        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        run: git push origin HEAD:main
+
+      - name: Build signed macOS app
+        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        env:
+          VERSION: ${{ steps.up.outputs.version }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          # Optional public T3 Connect config so new installs can sign in.
+          T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+          T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+          T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+        run: |
+          rustup target add aarch64-apple-darwin
+          export APPLE_API_KEY="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
+          rm -rf release
+          node scripts/build-desktop-artifact.ts \
+            --platform mac --target dmg --arch arm64 --build-version "$VERSION" --signed
+          rm -f "$APPLE_API_KEY"
+
+      - name: Publish release
+        if: steps.up.outputs.skip != 'true' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+          TAG: ${{ steps.up.outputs.tag }}
+          VERSION: ${{ steps.up.outputs.version }}
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes 2>/dev/null || true
+          # A leftover tag would make the release point at its commit instead of ours.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" 2>/dev/null || true
+          gh release create "$TAG" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
+            --target "$(git rev-parse HEAD)" \
+            --title "T3 Code (Joe) $VERSION" \
+            --notes "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) plus thread muting ([#16800](https://github.com/$UPSTREAM/pull/16800)). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
+          gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"Fork sync blocked\" in:title" --json number --jq '.[].number' |
+            while read -r n; do gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "Released $TAG."; done
+
+      - name: Report blocked sync
+        if: steps.merge.outputs.blocked == 'true' || steps.verify.outputs.blocked == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.up.outputs.tag }}
+          REASON: ${{ steps.merge.outputs.reason }}${{ steps.verify.outputs.reason }}
+        run: |
+          title="Fork sync blocked: $TAG"
+          existing="$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing" ]]; then
+            body="$REASON"$'\n\n'"Resolve it locally (merge \`$TAG\` into \`main\` and push), then run the Fork release workflow again. Nothing was released; installed apps are unchanged."
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+          echo "::warning::$title (issue opened; later runs retry quietly)"

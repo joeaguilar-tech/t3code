@@ -107,7 +107,9 @@ export function resolveDesktopAppBranding(input: {
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
-    displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    // Fork: only the visible name changes; setName keeps the stage label for the safeStorage keychain item.
+    displayName:
+      stageLabel === "Beta" ? `${APP_BASE_NAME} (Joe)` : `${APP_BASE_NAME} (${stageLabel})`,
   };
 }
 
