@@ -45,7 +45,10 @@ it.effect("lets an interactive request through without clearing an active pause"
     assert.equal(interactiveLease, 1);
     assert.equal((yield* Effect.flip(limits.check(github))).retryAt, 121_000);
 
-    yield* limits.recordRateLimit({ ...github, lease: interactiveLease, retryAt: 61_000 });
+    assert.equal(
+      yield* limits.recordRateLimit({ ...github, lease: interactiveLease, retryAt: 61_000 }),
+      121_000,
+    );
     assert.equal((yield* Effect.flip(limits.check(github))).retryAt, 121_000);
   }).pipe(Effect.provide(SourceControlRateLimit.layer)),
 );

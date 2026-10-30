@@ -915,6 +915,8 @@ export class PullRequestOperationError extends Schema.TaggedError<PullRequestOpe
     operation: Schema.String,
     detail: TrimmedNonEmptyString,
     reason: Schema.optional(Schema.Literal("not-found")),
+    /** When a rate-limit pause on the host ends, in epoch ms. */
+    retryAt: Schema.optional(Schema.Number),
     cause: Schema.optional(Schema.Defect()),
   },
   { httpApiStatus: 502 },
