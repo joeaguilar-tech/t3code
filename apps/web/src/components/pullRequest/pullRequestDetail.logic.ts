@@ -1202,6 +1202,10 @@ export function isPullRequestNotFound(failure: unknown): boolean {
   return isPullRequestOperationError(failure) && failure.reason === "not-found";
 }
 
+export function pullRequestRetryAt(failure: unknown): number | null {
+  return isPullRequestOperationError(failure) ? (failure.retryAt ?? null) : null;
+}
+
 const OPERATION_PREFIX = /^Pull request operation \w+ failed:\s*/iu;
 
 const HOST_LABELS = sourceControlClients.definitions

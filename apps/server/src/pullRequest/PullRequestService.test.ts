@@ -4052,6 +4052,7 @@ it.effect("pauses uncached activity on a host after one activity read is rate li
       _tag: "Failure",
       failure: {
         _tag: "PullRequestOperationError",
+        retryAt: 30_000,
         cause: { _tag: "PullRequestProviderError", reason: "rate-limited" },
       },
     });
@@ -4073,6 +4074,14 @@ it.effect("pauses uncached activity on a host after one activity read is rate li
       },
     });
     assert.strictEqual(activityReads, 1);
+
+    // A read a user is waiting on still asks the host.
+    yield* Effect.result(
+      service
+        .activity({ ...reference, number: 3 })
+        .pipe(Effect.provideService(SourceControlRateLimit.Interactive, true)),
+    );
+    assert.strictEqual(activityReads, 2);
   }),
 );
 
