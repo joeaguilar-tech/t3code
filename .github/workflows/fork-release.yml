@@ -84,7 +84,7 @@ jobs:
   release:
     needs: check
     if: needs.check.outputs.skip != 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 120
     env:
       TAG: ${{ needs.check.outputs.tag }}
