@@ -328,6 +328,16 @@ function resolveAgentAwarenessRelayPublishSnapshot(input: {
   };
 }
 
+function isHostPresent(power: HostPowerSnapshot): boolean {
+  return (
+    !power.stale &&
+    power.source === "electron-main" &&
+    power.idle === "false" &&
+    power.locked !== "true" &&
+    !power.suspended
+  );
+}
+
 export function resolvePresenceHold(input: {
   readonly power: HostPowerSnapshot;
   readonly enabled: boolean;
@@ -339,12 +349,7 @@ export function resolvePresenceHold(input: {
 }): "hold" | "dismiss" | "release" | "publish" {
   const terminal = input.phase === "completed" || input.phase === "failed";
   if (terminal && input.dismissed) return "dismiss";
-  const present =
-    !input.power.stale &&
-    input.power.source === "electron-main" &&
-    input.power.idle === "false" &&
-    input.power.locked !== "true" &&
-    !input.power.suspended;
+  const present = isHostPresent(input.power);
   if (
     input.enabled &&
     present &&
@@ -585,6 +590,28 @@ export const make = Effect.gen(function* () {
       snapshot.state?.phase === "completed" || snapshot.state?.phase === "failed"
         ? `${snapshot.state.phase}:${threadShell?.latestRunId}:${threadShell?.latestRunCompletedAt == null ? snapshot.state.updatedAt : DateTime.formatIso(threadShell.latestRunCompletedAt)}`
         : null;
+    const publishedStateByThread = yield* Ref.get(publishedStateByThreadRef);
+    if (Option.isNone(thread)) {
+      presenceHeldThreads.delete(threadId);
+      dismissedTerminalByThread.delete(threadId);
+    }
+    if (terminalIdentity !== null && !presenceHeldThreads.has(threadId)) {
+      // Startup and unmuting both start without publish history; only work finished after them alerts.
+      const quietBefore =
+        unmutedAtByThread.get(threadId) ??
+        (publishedStateByThread.has(threadId) ? undefined : startedAt);
+      if (
+        quietBefore !== undefined &&
+        (Option.isNone(thread) || !terminalWorkSinceStart(thread.value, quietBefore))
+      )
+        return;
+    }
+    if (publishedStateByThread.get(threadId) === agentAwarenessPublishIdentity(snapshot.state)) {
+      presenceHeldThreads.delete(threadId);
+      publishConfirmDeadlines.delete(threadId);
+      heldCompletions.delete(threadId);
+      return;
+    }
     const preferences = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
     const presenceDecision = resolvePresenceHold({
       power: yield* hostPower.snapshot,
@@ -611,29 +638,14 @@ export const make = Effect.gen(function* () {
         project,
       });
     }
-    if (Option.isNone(thread)) presenceHeldThreads.delete(threadId);
     if (presenceDecision === "release" && terminalIdentity !== null && snapshot.state !== null) {
+      // Refresh held completions so the relay’s two-minute freshness window still permits an alert.
       snapshot = {
         ...snapshot,
         state: { ...snapshot.state, updatedAt: DateTime.formatIso(yield* DateTime.now) },
       };
     }
     const publishIdentity = agentAwarenessPublishIdentity(snapshot.state);
-    const publishedStateByThread = yield* Ref.get(publishedStateByThreadRef);
-    if (snapshot.state?.phase === "completed" || snapshot.state?.phase === "failed") {
-      // Startup and unmuting both start without publish history; only work finished after them alerts.
-      const quietBefore =
-        presenceDecision === "release"
-          ? undefined
-          : (unmutedAtByThread.get(threadId) ??
-            (publishedStateByThread.has(threadId) ? undefined : startedAt));
-      if (
-        quietBefore !== undefined &&
-        (Option.isNone(thread) || !terminalWorkSinceStart(thread.value, quietBefore))
-      ) {
-        return;
-      }
-    }
     if (publishedStateByThread.get(threadId) === publishIdentity) {
       if (presenceDecision === "release") presenceHeldThreads.delete(threadId);
       // Clear moot deadlines so later transient nulls cannot skip their deferral window.
@@ -929,11 +941,17 @@ export const make = Effect.gen(function* () {
           );
         },
       );
+      const presenceEnabled = Effect.gen(function* () {
+        const power = yield* hostPower.snapshot;
+        const preferences = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
+        return isHostPresent(power) && (preferences?.holdPhoneAlertsWhilePresent ?? false);
+      });
       yield* forkParked(
-        Stream.runForEach(hostPower.streamChanges, () => republishPresenceThreads()),
-      );
-      yield* forkParked(
-        Stream.runForEach(settings.streamChanges, () => republishPresenceThreads()),
+        Stream.merge(hostPower.streamChanges, settings.streamChanges).pipe(
+          Stream.mapEffect(() => presenceEnabled),
+          Stream.changes,
+          Stream.runForEach(() => republishPresenceThreads()),
+        ),
       );
       yield* forkParked(
         Stream.runForEach(threads.streamDomainEvents, (event) => {
