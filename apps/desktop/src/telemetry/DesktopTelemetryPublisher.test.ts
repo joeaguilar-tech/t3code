@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
@@ -57,6 +58,51 @@ function layerElectronApp(
 }
 
 describe("DesktopTelemetryPublisher", () => {
+  it.effect.each(["unlock-screen", "user-did-become-active"] as const)(
+    "publishes active presence immediately on %s despite stale idle polling",
+    (event) =>
+      Effect.gen(function* () {
+        const events = new NodeEvents.EventEmitter();
+        const layerPower = Layer.succeed(
+          ElectronPowerMonitor.ElectronPowerMonitor,
+          ElectronPowerMonitor.ElectronPowerMonitor.of({
+            isOnBatteryPower: Effect.succeed(false),
+            getSystemIdleTime: Effect.succeed(120),
+            getSystemIdleState: () => Effect.succeed("locked"),
+            getCurrentThermalState: Effect.succeed("nominal"),
+            onSimpleEvent: (name, listener) =>
+              Effect.acquireRelease(
+                Effect.sync(() => events.on(name, listener)),
+                () => Effect.sync(() => events.off(name, listener)),
+              ).pipe(Effect.asVoid),
+            onThermalStateChange: () => Effect.void,
+            onSpeedLimitChange: () => Effect.void,
+          }),
+        );
+        const layer = DesktopTelemetryPublisher.layer.pipe(
+          Layer.provide(Layer.mergeAll(layerElectronApp([]), layerPower, layerHistory)),
+        );
+
+        yield* Effect.gen(function* () {
+          const publisher = yield* DesktopTelemetryPublisher.DesktopTelemetryPublisher;
+          yield* TestClock.adjust(Duration.zero);
+          const before = Option.getOrThrow(yield* publisher.latest);
+          assert.equal(before.power.idle, "true");
+          assert.equal(before.power.locked, "true");
+
+          events.emit(event);
+          yield* TestClock.adjust(Duration.zero);
+
+          const after = Option.getOrThrow(yield* publisher.latest);
+          assert.isAbove(after.sequence, before.sequence);
+          assert.equal(after.sampledAtUnixMs, before.sampledAtUnixMs);
+          assert.equal(after.power.idle, "false");
+          assert.equal(after.power.locked, "false");
+          assert.isFalse(after.power.suspended);
+        }).pipe(Effect.provide(layer));
+      }),
+  );
+
   it.effect("stops when its scope closes during an Electron telemetry sample", () =>
     Effect.gen(function* () {
       const pollStarted = yield* Deferred.make<void>();
