@@ -35,6 +35,7 @@ const encodeMessage = Schema.encodeSync(Schema.fromJsonString(DesktopHostTelemet
 const textEncoder = new TextEncoder();
 
 type PowerEvent =
+  | { readonly type: "active" }
   | { readonly type: "locked"; readonly value: boolean }
   | { readonly type: "suspended"; readonly value: boolean }
   | { readonly type: "onBattery"; readonly value: boolean }
@@ -43,6 +44,7 @@ type PowerEvent =
 
 interface PowerState {
   readonly idle: HostPowerSnapshot["idle"];
+  readonly idleEventPending: boolean;
   readonly locked: HostPowerSnapshot["locked"];
   readonly lockedEventPending: boolean;
   readonly suspended: boolean;
@@ -94,6 +96,16 @@ function idleState(value: ElectronPowerMonitor.ElectronIdleState): HostPowerSnap
 
 function updatePowerState(state: PowerState, event: PowerEvent): PowerState {
   switch (event.type) {
+    case "active":
+      return {
+        ...state,
+        idle: "false",
+        idleEventPending: true,
+        locked: "false",
+        lockedEventPending: true,
+        suspended: false,
+        suspendedEventPending: true,
+      };
     case "locked":
       return {
         ...state,
@@ -150,6 +162,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
 
   const initialPowerState: PowerState = {
     idle: "unknown",
+    idleEventPending: false,
     locked: "unknown",
     lockedEventPending: false,
     suspended: false,
@@ -182,9 +195,10 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
   yield* Effect.all(
     [
       powerMonitor.onSimpleEvent("lock-screen", () => offer({ type: "locked", value: true })),
-      powerMonitor.onSimpleEvent("unlock-screen", () => offer({ type: "locked", value: false })),
+      powerMonitor.onSimpleEvent("unlock-screen", () => offer({ type: "active" })),
       powerMonitor.onSimpleEvent("suspend", () => offer({ type: "suspended", value: true })),
-      powerMonitor.onSimpleEvent("resume", () => offer({ type: "suspended", value: false })),
+      powerMonitor.onSimpleEvent("resume", () => offer({ type: "active" })),
+      powerMonitor.onSimpleEvent("user-did-become-active", () => offer({ type: "active" })),
       powerMonitor.onSimpleEvent("on-battery", () => offer({ type: "onBattery", value: true })),
       powerMonitor.onSimpleEvent("on-ac", () => offer({ type: "onBattery", value: false })),
       powerMonitor.onThermalStateChange((value) => offer({ type: "thermal", value })),
@@ -224,6 +238,10 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
             : booleanState(systemIdleState === "locked");
         const polledOnBattery = booleanState(onBattery);
         const observedPower = yield* Ref.modify(powerState, (latestPower) => {
+          const preserveEventIdle =
+            latestPower.idleEventPending ||
+            latestPower.idle !== currentPower.idle ||
+            latestPower.idleEventPending !== currentPower.idleEventPending;
           const preserveEventLocked =
             latestPower.lockedEventPending ||
             latestPower.locked !== currentPower.locked ||
@@ -238,7 +256,8 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
             latestPower.suspendedEventPending !== currentPower.suspendedEventPending;
           const next: PowerState = {
             ...latestPower,
-            idle: idleState(systemIdleState),
+            idle: preserveEventIdle ? latestPower.idle : idleState(systemIdleState),
+            idleEventPending: false,
             locked: preserveEventLocked ? latestPower.locked : polledLocked,
             lockedEventPending:
               latestPower.lockedEventPending &&
