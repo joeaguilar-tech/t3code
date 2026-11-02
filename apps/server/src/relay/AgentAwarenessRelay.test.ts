@@ -759,7 +759,8 @@ describe("AgentAwarenessRelay", () => {
         yield* Queue.offer(settingsChanges, next);
         yield* Queue.take(settingsPulls);
       } else {
-        yield* Queue.take(pulls);
+        // The delivered rows already consumed this pull when returning to the host.
+        if (!delivered) yield* Queue.take(pulls);
         yield* Ref.set(harness.power, hostPower({ idle: "true" }));
         yield* Queue.offer(changes, hostPower({ idle: "true" }));
         yield* Queue.take(pulls);
