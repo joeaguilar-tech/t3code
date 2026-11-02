@@ -229,9 +229,16 @@ jobs:
           rustup target add aarch64-apple-darwin
           export APPLE_API_KEY="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
           printf '%s' "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
-          rm -rf release
-          node scripts/build-desktop-artifact.ts \
-            --platform mac --target dmg --arch arm64 --build-version "$VERSION" --signed
+          # hdiutil can fail with "Resource temporarily unavailable" while Spotlight or a
+          # scanner holds the image on this self-hosted Mac; a fresh attempt clears it.
+          for attempt in 1 2 3; do
+            rm -rf release
+            node scripts/build-desktop-artifact.ts \
+              --platform mac --target dmg --arch arm64 --build-version "$VERSION" --signed && break
+            (( attempt < 3 )) || exit 1
+            echo "::warning::Build attempt $attempt failed; retrying"
+            sleep 15
+          done
           rm -f "$APPLE_API_KEY"
 
       - name: Publish release
