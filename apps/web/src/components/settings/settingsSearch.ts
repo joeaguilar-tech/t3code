@@ -530,6 +530,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification toast popup completion input approval failure"],
   },
   {
+    id: "hold-phone-alerts-while-present",
+    title: "Hold phone alerts while I'm using this computer",
+    to: "/settings/general",
+    searchTerms: ["push mobile phone notification quiet silence idle away present desktop"],
+  },
+  {
     id: "time-format",
     title: "Time format",
     to: "/settings/general",

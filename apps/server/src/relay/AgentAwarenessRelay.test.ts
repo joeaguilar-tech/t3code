@@ -2,6 +2,9 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
   EnvironmentId,
+  type HostPowerSnapshot,
+  type ServerSettings as ServerSettingsValue,
+  RuntimeRequestId,
   EventId,
   MessageId,
   NodeId,
@@ -35,6 +38,8 @@ import {
   RELAY_ISSUER_SECRET,
   RELAY_URL_SECRET,
 } from "../cloud/config.ts";
+import * as HostPowerMonitor from "../background/HostPowerMonitor.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -92,6 +97,28 @@ function shell(overrides: Partial<OrchestrationV2ThreadShell> = {}): Orchestrati
   };
 }
 
+function hostPower(overrides: Partial<HostPowerSnapshot> = {}): HostPowerSnapshot {
+  return {
+    source: "electron-main",
+    idle: "false",
+    idleSeconds: 0,
+    locked: "false",
+    suspended: false,
+    stale: false,
+    onBattery: "unknown",
+    lowPowerMode: "unknown",
+    thermalState: "unknown",
+    updatedAt: DateTime.makeUnsafe(NOW),
+    ...overrides,
+  };
+}
+
+const approval = {
+  id: RuntimeRequestId.make("approval"),
+  kind: "command" as const,
+  createdAt: DateTime.makeUnsafe(NOW),
+};
+
 const PublishPayload = Schema.Struct({ state: Schema.NullOr(RelayAgentActivityState) });
 const decodePublishPayload = Schema.decodeUnknownSync(Schema.fromJsonString(PublishPayload));
 const unused = () => Effect.die("Unexpected test dependency call");
@@ -140,6 +167,10 @@ describe("startup agent activity", () => {
 
 const makeTestRelay = Effect.fnUntraced(function* (
   options: {
+    readonly power?: HostPowerSnapshot;
+    readonly settingsChanges?: Stream.Stream<ServerSettingsValue>;
+    readonly powerChanges?: Stream.Stream<HostPowerSnapshot>;
+    readonly hold?: boolean;
     readonly respond?: (attempt: number) => Response;
     readonly failSecretRead?: (name: string) => boolean;
     readonly linked?: boolean;
@@ -255,7 +286,20 @@ const makeTestRelay = Effect.fnUntraced(function* (
     },
     { preconnect: () => {} },
   );
+  const power = yield* Ref.make(options.power ?? hostPower({ stale: true }));
+  const settings = yield* ServerSettings.ServerSettingsService.pipe(
+    Effect.provide(ServerSettings.layerTest({ holdPhoneAlertsWhilePresent: options.hold ?? true })),
+  );
   const relay = yield* AgentAwarenessRelay.make.pipe(
+    Effect.provideService(HostPowerMonitor.HostPowerMonitor, {
+      snapshot: Ref.get(power),
+      report: (next) => Ref.set(power, next),
+      streamChanges: options.powerChanges ?? Stream.empty,
+    }),
+    Effect.provideService(ServerSettings.ServerSettingsService, {
+      ...settings,
+      streamChanges: options.settingsChanges ?? Stream.empty,
+    }),
     Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),
     Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
     Effect.provideService(ServerEnvironment.ServerEnvironment, {
@@ -287,7 +331,17 @@ const makeTestRelay = Effect.fnUntraced(function* (
     Effect.provideService(FetchHttpClient.Fetch, fetch),
     Effect.provide(NodeCrypto.layer),
   );
-  return { relay, secrets, secretReads, currentShell, shellReads, publications, catchUp };
+  return {
+    relay,
+    secrets,
+    secretReads,
+    currentShell,
+    shellReads,
+    publications,
+    catchUp,
+    power,
+    settings,
+  };
 });
 
 describe("AgentAwarenessRelay", () => {
@@ -553,6 +607,233 @@ describe("AgentAwarenessRelay", () => {
       assert.equal(publications.length, 2);
       assert.equal(publications[1]?.state, null);
     }),
+  );
+
+  it.each([
+    {
+      name: "unknown lock",
+      power: hostPower({ locked: "unknown" }),
+      phase: "waiting_for_input",
+      expected: "hold",
+    },
+    {
+      name: "locked host",
+      power: hostPower({ locked: "true" }),
+      phase: "failed",
+      expected: "publish",
+    },
+    {
+      name: "suspended host",
+      power: hostPower({ suspended: true }),
+      phase: "completed",
+      expected: "publish",
+    },
+    { name: "failed run", power: hostPower(), phase: "failed", expected: "hold" },
+    {
+      name: "already delivered approval",
+      power: hostPower(),
+      phase: "waiting_for_approval",
+      newlyRings: false,
+      expected: "publish",
+    },
+  ] as const)("presence decision: $name", (row) => {
+    const { power, phase, expected } = row;
+    assert.equal(
+      AgentAwarenessRelay.resolvePresenceHold({
+        power,
+        phase,
+        enabled: true,
+        wasHeld: false,
+        newlyRings: "newlyRings" in row ? row.newlyRings : true,
+        dismissed: false,
+        completedAt: null,
+        lastVisitedAt: null,
+      }),
+      expected,
+    );
+  });
+
+  it.effect.each([
+    { name: "present approval", power: hostPower(), hold: true, muted: false, withdrawn: true },
+    {
+      name: "stale presence",
+      power: hostPower({ stale: true }),
+      hold: true,
+      muted: false,
+      withdrawn: false,
+    },
+    {
+      name: "unknown idle",
+      power: hostPower({ idle: "unknown" }),
+      hold: true,
+      muted: false,
+      withdrawn: false,
+    },
+    {
+      name: "non-desktop source",
+      power: hostPower({ source: "node-linux" }),
+      hold: true,
+      muted: false,
+      withdrawn: false,
+    },
+    { name: "disabled setting", power: hostPower(), hold: false, muted: false, withdrawn: false },
+    { name: "muted present", power: hostPower(), hold: true, muted: true, withdrawn: true },
+  ])("presence gate: $name", ({ power, hold, muted, withdrawn }) =>
+    Effect.gen(function* () {
+      const { relay, currentShell, publications } = yield* makeTestRelay({ power, hold });
+      yield* Ref.set(
+        currentShell,
+        shell({
+          pendingRuntimeRequest: approval,
+          mutedAt: muted ? DateTime.makeUnsafe(NOW) : null,
+        }),
+      );
+      yield* relay.publishThread(THREAD_ID);
+      yield* TestClock.adjust("5 seconds");
+      yield* relay.drain;
+      assert.equal(
+        publications.at(-1)?.state?.phase ?? null,
+        withdrawn ? null : "waiting_for_approval",
+      );
+    }),
+  );
+
+  it.effect.each([
+    "approval",
+    "visited",
+    "unvisited",
+    "setting-off",
+    "delivered-completion",
+    "delivered-approval",
+    "delivered-retitled",
+    "startup-completion",
+  ] as const)("presence gate releases %s on leaving the host", (kind) =>
+    Effect.gen(function* () {
+      const changes = yield* Queue.unbounded<HostPowerSnapshot>();
+      const pulls = yield* Queue.unbounded<void>();
+      const settingsChanges = yield* Queue.unbounded<ServerSettingsValue>();
+      const settingsPulls = yield* Queue.unbounded<void>();
+      const harness = yield* makeTestRelay({
+        settingsChanges: Stream.fromEffectRepeat(
+          Queue.offer(settingsPulls, undefined).pipe(Effect.andThen(Queue.take(settingsChanges))),
+        ),
+        power: hostPower({ idle: kind.startsWith("delivered-") ? "true" : "false" }),
+        powerChanges: Stream.fromEffectRepeat(
+          Queue.offer(pulls, undefined).pipe(Effect.andThen(Queue.take(changes))),
+        ),
+      });
+      yield* harness.relay.start();
+      if (kind !== "startup-completion") yield* harness.relay.publishThread(THREAD_ID);
+      const completedAt =
+        kind === "startup-completion"
+          ? DateTime.makeUnsafe("1969-12-31T23:59:00.000Z")
+          : yield* DateTime.now;
+      yield* Ref.set(
+        harness.currentShell,
+        shell(
+          kind === "approval" ||
+            kind === "setting-off" ||
+            kind === "delivered-approval" ||
+            kind === "delivered-retitled"
+            ? {
+                pendingRuntimeRequest: approval,
+              }
+            : {
+                status: "completed",
+                latestRunCompletedAt: completedAt,
+                lastVisitedAt: kind === "visited" ? completedAt : null,
+              },
+        ),
+      );
+      yield* harness.relay.publishThread(THREAD_ID);
+      yield* TestClock.adjust("5 seconds");
+      yield* harness.relay.drain;
+      const delivered = kind.startsWith("delivered-");
+      if (delivered) {
+        yield* Queue.take(pulls);
+        yield* Ref.set(harness.power, hostPower());
+        yield* Queue.offer(changes, hostPower());
+        yield* Queue.take(pulls);
+        yield* TestClock.adjust("5 seconds");
+        yield* harness.relay.drain;
+        assert.equal(harness.publications.length, 2);
+        if (kind === "delivered-retitled") {
+          // Waiting -> waiting does not ring at the relay, so the card just updates.
+          yield* Ref.update(harness.currentShell, (current) =>
+            current === null ? null : { ...current, title: "Renamed while present" },
+          );
+          yield* harness.relay.publishThread(THREAD_ID);
+          yield* TestClock.adjust("5 seconds");
+          yield* harness.relay.drain;
+        }
+      }
+      if (kind === "unvisited") yield* TestClock.adjust("3 minutes");
+      if (!delivered)
+        assert.notInclude(
+          harness.publications.map((p) => p.state?.phase),
+          kind === "approval" || kind === "setting-off" ? "waiting_for_approval" : "completed",
+        );
+      if (kind === "setting-off") {
+        yield* Queue.take(settingsPulls);
+        const next = yield* harness.settings.updateSettings({
+          holdPhoneAlertsWhilePresent: false,
+        });
+        yield* Queue.offer(settingsChanges, next);
+        yield* Queue.take(settingsPulls);
+      } else {
+        // The delivered rows already consumed this pull when returning to the host.
+        if (!delivered) yield* Queue.take(pulls);
+        yield* Ref.set(harness.power, hostPower({ idle: "true" }));
+        yield* Queue.offer(changes, hostPower({ idle: "true" }));
+        yield* Queue.take(pulls);
+      }
+      yield* TestClock.adjust("5 seconds");
+      yield* harness.relay.drain;
+      if (delivered) {
+        assert.equal(harness.publications.length, kind === "delivered-retitled" ? 3 : 2);
+        assert.notInclude(
+          harness.publications.map((p) => p.state),
+          null,
+        );
+        return;
+      }
+      if (kind === "startup-completion") {
+        assert.notInclude(
+          harness.publications.map((p) => p.state?.phase),
+          "completed",
+        );
+        return;
+      }
+      if (kind === "unvisited") {
+        const state = harness.publications.at(-1)?.state;
+        assert.isNotNull(state);
+        assert.isTrue(
+          DateTime.toEpochMillis(yield* DateTime.now) -
+            DateTime.toEpochMillis(DateTime.makeUnsafe(state!.updatedAt)) <=
+            120_000,
+        );
+      }
+      assert.equal(
+        harness.publications.at(-1)?.state?.phase ?? null,
+        kind === "visited"
+          ? null
+          : kind === "approval" || kind === "setting-off" || kind === "delivered-approval"
+            ? "waiting_for_approval"
+            : "completed",
+      );
+      if (kind === "visited") {
+        yield* Ref.update(harness.currentShell, (current) =>
+          current === null ? null : { ...current, title: "Visited completion" },
+        );
+        yield* harness.relay.publishThread(THREAD_ID);
+        yield* TestClock.adjust("5 seconds");
+        yield* harness.relay.drain;
+        assert.notInclude(
+          harness.publications.map((publication) => publication.state?.phase),
+          "completed",
+        );
+      }
+    }).pipe(Effect.scoped),
   );
 
   it.effect("withdraws a muted thread and restores it when unmuted", () =>
