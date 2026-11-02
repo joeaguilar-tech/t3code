@@ -689,83 +689,124 @@ describe("AgentAwarenessRelay", () => {
     }),
   );
 
-  it.effect.each(["approval", "visited", "unvisited", "setting-off"] as const)(
-    "presence gate releases %s on leaving the host",
-    (kind) =>
-      Effect.gen(function* () {
-        const changes = yield* Queue.unbounded<HostPowerSnapshot>();
-        const pulls = yield* Queue.unbounded<void>();
-        const settingsChanges = yield* Queue.unbounded<ServerSettingsValue>();
-        const settingsPulls = yield* Queue.unbounded<void>();
-        const harness = yield* makeTestRelay({
-          settingsChanges: Stream.fromEffectRepeat(
-            Queue.offer(settingsPulls, undefined).pipe(Effect.andThen(Queue.take(settingsChanges))),
-          ),
-          power: hostPower(),
-          powerChanges: Stream.fromEffectRepeat(
-            Queue.offer(pulls, undefined).pipe(Effect.andThen(Queue.take(changes))),
-          ),
+  it.effect.each([
+    "approval",
+    "visited",
+    "unvisited",
+    "setting-off",
+    "delivered-completion",
+    "delivered-approval",
+    "startup-completion",
+  ] as const)("presence gate releases %s on leaving the host", (kind) =>
+    Effect.gen(function* () {
+      const changes = yield* Queue.unbounded<HostPowerSnapshot>();
+      const pulls = yield* Queue.unbounded<void>();
+      const settingsChanges = yield* Queue.unbounded<ServerSettingsValue>();
+      const settingsPulls = yield* Queue.unbounded<void>();
+      const harness = yield* makeTestRelay({
+        settingsChanges: Stream.fromEffectRepeat(
+          Queue.offer(settingsPulls, undefined).pipe(Effect.andThen(Queue.take(settingsChanges))),
+        ),
+        power: hostPower({ idle: kind.startsWith("delivered-") ? "true" : "false" }),
+        powerChanges: Stream.fromEffectRepeat(
+          Queue.offer(pulls, undefined).pipe(Effect.andThen(Queue.take(changes))),
+        ),
+      });
+      yield* harness.relay.start();
+      if (kind !== "startup-completion") yield* harness.relay.publishThread(THREAD_ID);
+      const completedAt =
+        kind === "startup-completion"
+          ? DateTime.makeUnsafe("1969-12-31T23:59:00.000Z")
+          : yield* DateTime.now;
+      yield* Ref.set(
+        harness.currentShell,
+        shell(
+          kind === "approval" || kind === "setting-off" || kind === "delivered-approval"
+            ? {
+                pendingRuntimeRequest: approval,
+              }
+            : {
+                status: "completed",
+                latestRunCompletedAt: completedAt,
+                lastVisitedAt: kind === "visited" ? completedAt : null,
+              },
+        ),
+      );
+      yield* harness.relay.publishThread(THREAD_ID);
+      yield* TestClock.adjust("5 seconds");
+      yield* harness.relay.drain;
+      const delivered = kind.startsWith("delivered-");
+      if (delivered) {
+        yield* Queue.take(pulls);
+        yield* Ref.set(harness.power, hostPower());
+        yield* Queue.offer(changes, hostPower());
+        yield* Queue.take(pulls);
+        yield* TestClock.adjust("5 seconds");
+        yield* harness.relay.drain;
+        assert.equal(harness.publications.length, 2);
+      }
+      if (kind === "unvisited") yield* TestClock.adjust("3 minutes");
+      if (!delivered)
+        assert.notInclude(
+          harness.publications.map((p) => p.state?.phase),
+          kind === "approval" || kind === "setting-off" ? "waiting_for_approval" : "completed",
+        );
+      if (kind === "setting-off") {
+        yield* Queue.take(settingsPulls);
+        const next = yield* harness.settings.updateSettings({
+          holdPhoneAlertsWhilePresent: false,
         });
-        yield* harness.relay.start();
-        yield* harness.relay.publishThread(THREAD_ID);
-        const completedAt = yield* DateTime.now;
-        yield* Ref.set(
-          harness.currentShell,
-          shell(
-            kind === "approval" || kind === "setting-off"
-              ? {
-                  pendingRuntimeRequest: approval,
-                }
-              : {
-                  status: "completed",
-                  latestRunCompletedAt: completedAt,
-                  lastVisitedAt: kind === "visited" ? completedAt : null,
-                },
-          ),
+        yield* Queue.offer(settingsChanges, next);
+        yield* Queue.take(settingsPulls);
+      } else {
+        yield* Queue.take(pulls);
+        yield* Ref.set(harness.power, hostPower({ idle: "true" }));
+        yield* Queue.offer(changes, hostPower({ idle: "true" }));
+        yield* Queue.take(pulls);
+      }
+      yield* TestClock.adjust("5 seconds");
+      yield* harness.relay.drain;
+      if (delivered) {
+        assert.equal(harness.publications.length, 2);
+        return;
+      }
+      if (kind === "startup-completion") {
+        assert.notInclude(
+          harness.publications.map((p) => p.state?.phase),
+          "completed",
+        );
+        return;
+      }
+      if (kind === "unvisited") {
+        const state = harness.publications.at(-1)?.state;
+        assert.isNotNull(state);
+        assert.isTrue(
+          DateTime.toEpochMillis(yield* DateTime.now) -
+            DateTime.toEpochMillis(DateTime.makeUnsafe(state!.updatedAt)) <=
+            120_000,
+        );
+      }
+      assert.equal(
+        harness.publications.at(-1)?.state?.phase ?? null,
+        kind === "visited"
+          ? null
+          : kind === "approval" || kind === "setting-off" || kind === "delivered-approval"
+            ? "waiting_for_approval"
+            : "completed",
+      );
+      if (kind === "visited") {
+        yield* Ref.update(harness.currentShell, (current) =>
+          current === null ? null : { ...current, title: "Visited completion" },
         );
         yield* harness.relay.publishThread(THREAD_ID);
         yield* TestClock.adjust("5 seconds");
         yield* harness.relay.drain;
         assert.notInclude(
-          harness.publications.map((p) => p.state?.phase),
-          kind === "approval" || kind === "setting-off" ? "waiting_for_approval" : "completed",
+          harness.publications.map((publication) => publication.state?.phase),
+          "completed",
         );
-        if (kind === "setting-off") {
-          yield* Queue.take(settingsPulls);
-          const next = yield* harness.settings.updateSettings({
-            holdPhoneAlertsWhilePresent: false,
-          });
-          yield* Queue.offer(settingsChanges, next);
-          yield* Queue.take(settingsPulls);
-        } else {
-          yield* Queue.take(pulls);
-          yield* Ref.set(harness.power, hostPower({ idle: "true" }));
-          yield* Queue.offer(changes, hostPower({ idle: "true" }));
-          yield* Queue.take(pulls);
-        }
-        yield* TestClock.adjust("5 seconds");
-        yield* harness.relay.drain;
-        assert.equal(
-          harness.publications.at(-1)?.state?.phase ?? null,
-          kind === "visited"
-            ? null
-            : kind === "approval" || kind === "setting-off"
-              ? "waiting_for_approval"
-              : "completed",
-        );
-        if (kind === "visited") {
-          yield* Ref.update(harness.currentShell, (current) =>
-            current === null ? null : { ...current, title: "Visited completion" },
-          );
-          yield* harness.relay.publishThread(THREAD_ID);
-          yield* TestClock.adjust("5 seconds");
-          yield* harness.relay.drain;
-          assert.notInclude(
-            harness.publications.map((publication) => publication.state?.phase),
-            "completed",
-          );
-        }
-      }).pipe(Effect.scoped),
+      }
+    }).pipe(Effect.scoped),
   );
 
   it.effect("withdraws a muted thread and restores it when unmuted", () =>
