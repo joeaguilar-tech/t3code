@@ -609,6 +609,41 @@ describe("AgentAwarenessRelay", () => {
     }),
   );
 
+  it.each([
+    {
+      name: "unknown lock",
+      power: hostPower({ locked: "unknown" }),
+      phase: "waiting_for_input",
+      expected: "hold",
+    },
+    {
+      name: "locked host",
+      power: hostPower({ locked: "true" }),
+      phase: "failed",
+      expected: "publish",
+    },
+    {
+      name: "suspended host",
+      power: hostPower({ suspended: true }),
+      phase: "completed",
+      expected: "publish",
+    },
+    { name: "failed run", power: hostPower(), phase: "failed", expected: "hold" },
+  ] as const)("presence decision: $name", ({ power, phase, expected }) => {
+    assert.equal(
+      AgentAwarenessRelay.resolvePresenceHold({
+        power,
+        phase,
+        enabled: true,
+        wasHeld: false,
+        dismissed: false,
+        completedAt: null,
+        lastVisitedAt: null,
+      }),
+      expected,
+    );
+  });
+
   it.effect.each([
     { name: "present approval", power: hostPower(), hold: true, muted: false, withdrawn: true },
     {
@@ -718,6 +753,18 @@ describe("AgentAwarenessRelay", () => {
               ? "waiting_for_approval"
               : "completed",
         );
+        if (kind === "visited") {
+          yield* Ref.update(harness.currentShell, (current) =>
+            current === null ? null : { ...current, title: "Visited completion" },
+          );
+          yield* harness.relay.publishThread(THREAD_ID);
+          yield* TestClock.adjust("5 seconds");
+          yield* harness.relay.drain;
+          assert.notInclude(
+            harness.publications.map((publication) => publication.state?.phase),
+            "completed",
+          );
+        }
       }).pipe(Effect.scoped),
   );
 
