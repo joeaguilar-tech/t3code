@@ -696,6 +696,7 @@ describe("AgentAwarenessRelay", () => {
     "setting-off",
     "delivered-completion",
     "delivered-approval",
+    "delivered-retitled",
     "startup-completion",
   ] as const)("presence gate releases %s on leaving the host", (kind) =>
     Effect.gen(function* () {
@@ -721,7 +722,10 @@ describe("AgentAwarenessRelay", () => {
       yield* Ref.set(
         harness.currentShell,
         shell(
-          kind === "approval" || kind === "setting-off" || kind === "delivered-approval"
+          kind === "approval" ||
+            kind === "setting-off" ||
+            kind === "delivered-approval" ||
+            kind === "delivered-retitled"
             ? {
                 pendingRuntimeRequest: approval,
               }
@@ -744,6 +748,15 @@ describe("AgentAwarenessRelay", () => {
         yield* TestClock.adjust("5 seconds");
         yield* harness.relay.drain;
         assert.equal(harness.publications.length, 2);
+        if (kind === "delivered-retitled") {
+          // Waiting -> waiting does not ring at the relay, so the card just updates.
+          yield* Ref.update(harness.currentShell, (current) =>
+            current === null ? null : { ...current, title: "Renamed while present" },
+          );
+          yield* harness.relay.publishThread(THREAD_ID);
+          yield* TestClock.adjust("5 seconds");
+          yield* harness.relay.drain;
+        }
       }
       if (kind === "unvisited") yield* TestClock.adjust("3 minutes");
       if (!delivered)
@@ -768,7 +781,11 @@ describe("AgentAwarenessRelay", () => {
       yield* TestClock.adjust("5 seconds");
       yield* harness.relay.drain;
       if (delivered) {
-        assert.equal(harness.publications.length, 2);
+        assert.equal(harness.publications.length, kind === "delivered-retitled" ? 3 : 2);
+        assert.notInclude(
+          harness.publications.map((p) => p.state),
+          null,
+        );
         return;
       }
       if (kind === "startup-completion") {
