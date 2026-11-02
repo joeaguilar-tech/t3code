@@ -256,6 +256,14 @@ jobs:
             --target "$(git rev-parse HEAD)" \
             --title "T3 Code (Joe) $VERSION" \
             --notes "Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") (latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
+
+      # The sync token cannot comment on issues; the job token can.
+      - name: Close blocked-sync issues
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
           gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"Fork sync blocked\" in:title" --json number --jq '.[].number' |
             while read -r n; do gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "Released v$VERSION."; done
 
