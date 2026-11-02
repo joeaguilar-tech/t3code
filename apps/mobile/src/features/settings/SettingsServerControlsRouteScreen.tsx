@@ -377,6 +377,18 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       onValueChange={(value) => write({ enableAgentBrowserAccess: value })}
                     />
                   </SettingsSection>
+                  {!projectSelected ? (
+                    <SettingsSection title="Notifications">
+                      <SettingsSwitchRow
+                        icon="bell.badge"
+                        label="Hold phone alerts while I'm using this computer"
+                        subtitle="Approvals and questions ring your phone once you step away."
+                        value={uniform("holdPhoneAlertsWhilePresent")}
+                        disabled={disabledFor("holdPhoneAlertsWhilePresent")}
+                        onValueChange={(value) => write({ holdPhoneAlertsWhilePresent: value })}
+                      />
+                    </SettingsSection>
+                  ) : null}
                   <AutoSettleSettingsRows write={write} pending={pendingWrites > 0} />
                 </>
               ) : null}

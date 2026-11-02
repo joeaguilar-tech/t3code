@@ -475,6 +475,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
       ? ["Auto-settle merged threads"]
       : []),
+    ...(settings.holdPhoneAlertsWhilePresent !== DEFAULT_UNIFIED_SETTINGS.holdPhoneAlertsWhilePresent
+      ? ["Hold phone alerts while I'm using this computer"]
+      : []),
     ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
       ? ["Resume after usage limits"]
       : []),
@@ -634,6 +637,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
+      holdPhoneAlertsWhilePresent: DEFAULT_UNIFIED_SETTINGS.holdPhoneAlertsWhilePresent,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
       snoozePresets: DEFAULT_UNIFIED_SETTINGS.snoozePresets,
@@ -771,6 +775,22 @@ export function GeneralSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="notifications" title="Notifications">
         <NotificationSettings />
+        <SettingsRow
+          serverScoped
+          title="Hold phone alerts while I'm using this computer"
+          description="Approvals and questions ring your phone once you step away."
+          settingKeys={["holdPhoneAlertsWhilePresent"]}
+          control={
+            <ScopedSwitch
+              settingKeys={["holdPhoneAlertsWhilePresent"]}
+              checked={settings.holdPhoneAlertsWhilePresent}
+              onCheckedChange={(checked) =>
+                updateSettings({ holdPhoneAlertsWhilePresent: Boolean(checked) })
+              }
+              aria-label="Hold phone alerts while I'm using this computer"
+            />
+          }
+        />
         <SettingsRow
           {...searchableSetting("in-app-notifications")}
           description="Show a toast when another thread finishes, fails, or needs input or approval while this app has focus."
