@@ -1,8 +1,9 @@
 # Fork-only: release T3 Code (Joe) when main changes or pingdotgg/t3code publishes a
-# stable release. Upstream X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is
-# newer than the last and installed apps update from these releases (the feed comes
-# from GITHUB_REPOSITORY). packages/shared/src/forkVersion.ts maps it back for
-# runtime downloads.
+# stable release. A change to main (or a manual run) first merges upstream main; the
+# hourly check merges upstream's latest release. Versions follow that release: upstream
+# X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is newer than the last and
+# installed apps update from these releases (the feed comes from GITHUB_REPOSITORY).
+# packages/shared/src/forkVersion.ts maps it back for runtime downloads.
 name: Fork release
 
 on:
@@ -36,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
+      upstream_ref: ${{ steps.plan.outputs.upstream_ref }}
       skip: ${{ steps.plan.outputs.skip }}
     steps:
       - name: Disable upstream workflows
@@ -51,19 +53,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force }}
+          EVENT: ${{ github.event_name }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          tag_sha="$(gh api "repos/$UPSTREAM/commits/$tag" --jq .sha)"
+          # The release job pushes its own upstream merge to main; that run already releases it.
+          if [[ "$EVENT" == "push" && "$HEAD_MESSAGE" == "Merge upstream "* ]]; then
+            echo "Push is this workflow's own upstream merge."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$EVENT" == "schedule" ]]; then upstream_ref="$tag"; else upstream_ref="main"; fi
+          echo "upstream_ref=$upstream_ref" >> "$GITHUB_OUTPUT"
+          upstream_sha="$(gh api "repos/$UPSTREAM/commits/$upstream_ref" --jq .sha)"
           main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
           # Fork networks share objects, so upstream SHAs resolve here. Unknown means merge.
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$tag_sha...$main_sha" --jq .status 2>/dev/null || echo unknown)"
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$upstream_sha...$main_sha" --jq .status 2>/dev/null || echo unknown)"
           last_tag="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
           last_sha=""
           if [[ -n "$last_tag" ]]; then
             last_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$last_tag" --jq .sha 2>/dev/null || true)"
           fi
-          echo "upstream $tag ($status vs main); main $main_sha; last release $last_tag ($last_sha)"
+          echo "upstream $upstream_ref ($status vs main); main $main_sha; last release $last_tag ($last_sha)"
           if [[ "$FORCE" != "true" && ( "$status" == "ahead" || "$status" == "identical" ) && "$main_sha" == "$last_sha" ]]; then
             echo "Nothing new since $last_tag."
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -76,6 +88,7 @@ jobs:
     timeout-minutes: 120
     env:
       TAG: ${{ needs.check.outputs.tag }}
+      UPSTREAM_REF: ${{ needs.check.outputs.upstream_ref }}
     steps:
       - name: Check secrets
         env:
@@ -103,13 +116,14 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.FORK_SYNC_TOKEN }}
 
-      - name: Merge upstream release
+      - name: Merge upstream
         id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$TAG:refs/tags/upstream/$TAG"
-          if git merge --no-edit -m "Merge upstream $TAG" "upstream/$TAG"; then exit 0; fi
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "$UPSTREAM_REF:refs/remotes/upstream/$UPSTREAM_REF"
+          # The check job skips pushes with this message prefix; keep them in sync.
+          if git merge --no-edit -m "Merge upstream $UPSTREAM_REF" "upstream/$UPSTREAM_REF"; then exit 0; fi
           # Only a measured number; upstream's value is fine for a build.
           budget=apps/server/src/provider/agentContextBudget.json
           if git diff --name-only --diff-filter=U | grep -qx "$budget"; then
@@ -124,7 +138,7 @@ jobs:
           {
             echo "blocked=true"
             echo "reason<<EOF"
-            echo "Merging \`$TAG\` into \`main\` conflicts in:"
+            echo "Merging upstream \`$UPSTREAM_REF\` into \`main\` conflicts in:"
             echo
             echo "$conflicts" | sed 's/^/- `/; s/$/`/'
             echo EOF
@@ -218,7 +232,7 @@ jobs:
           gh release create "v$VERSION" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
             --target "$(git rev-parse HEAD)" \
             --title "T3 Code (Joe) $VERSION" \
-            --notes "Based on upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
+            --notes "Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") (latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
           gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"Fork sync blocked\" in:title" --json number --jq '.[].number' |
             while read -r n; do gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "Released v$VERSION."; done
 
@@ -228,10 +242,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REASON: ${{ steps.merge.outputs.reason }}${{ steps.verify.outputs.reason }}
         run: |
-          title="Fork sync blocked: $TAG"
+          title="Fork sync blocked: upstream $UPSTREAM_REF"
           existing="$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
           if [[ -z "$existing" ]]; then
-            body="$REASON"$'\n\n'"Resolve it locally (merge \`$TAG\` into \`main\` and push), then run the Fork release workflow again. Nothing was released; installed apps are unchanged."
+            body="$REASON"$'\n\n'"Resolve it locally (merge upstream \`$UPSTREAM_REF\` into \`main\` and push), then run the Fork release workflow again. Nothing was released; installed apps are unchanged."
             gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
           fi
           echo "::warning::$title (issue opened; later runs retry quietly)"
