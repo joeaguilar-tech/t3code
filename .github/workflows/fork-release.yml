@@ -145,8 +145,20 @@ jobs:
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/setup-ci-deps
+      # The shared setup restores a Vite+ cache built under GitHub's runner home, which
+      # does not exist on this self-hosted Mac; its pnpm store persists locally instead.
+      - name: Setup Vite+
         if: steps.merge.outputs.blocked != 'true'
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        env:
+          VP_DOWNLOAD_TIMEOUT: "120"
+        with:
+          node-version-file: package.json
+          cache: false
+
+      - name: Install dependencies
+        if: steps.merge.outputs.blocked != 'true'
+        run: vp install
 
       - name: Check fork features
         id: verify
