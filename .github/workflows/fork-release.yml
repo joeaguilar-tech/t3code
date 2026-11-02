@@ -229,9 +229,9 @@ jobs:
           rustup target add aarch64-apple-darwin
           export APPLE_API_KEY="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
           printf '%s' "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
-          # This Mac's endpoint security (Kandji) makes `hdiutil convert` fail, which the
-          # DMG builder needs. Build the updater zip, then make the installer DMG with
-          # `hdiutil create`, which works there.
+          # This Mac's endpoint security (Kandji) breaks `hdiutil convert`, which the DMG
+          # builder needs, and makes `hdiutil create` flaky. Updates only need the zip, so
+          # the installer DMG is best-effort.
           rm -rf release
           node scripts/build-desktop-artifact.ts \
             --platform mac --target zip --arch arm64 --build-version "$VERSION" --signed
@@ -239,8 +239,13 @@ jobs:
           rm -rf "$stage" && mkdir -p "$stage"
           ditto -x -k release/*.zip "$stage"
           ln -s /Applications "$stage/Applications"
-          hdiutil create -volname "T3 Code (Joe) $VERSION" -srcfolder "$stage" \
-            -format UDZO -ov "release/T3-Code-$VERSION-arm64.dmg"
+          for attempt in 1 2 3; do
+            hdiutil create -volname "T3 Code (Joe) $VERSION" -srcfolder "$stage" \
+              -format UDZO -ov "release/T3-Code-$VERSION-arm64.dmg" && break
+            rm -f "release/T3-Code-$VERSION-arm64.dmg"
+            (( attempt < 3 )) || echo "::warning::No installer DMG this release; updates use the zip."
+            sleep 10
+          done
           rm -rf "$stage"
           rm -f "$APPLE_API_KEY"
 
@@ -252,10 +257,11 @@ jobs:
         run: |
           # A leftover tag would make the release point at its commit instead of ours.
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION" 2>/dev/null || true
+          shopt -s nullglob
           gh release create "v$VERSION" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
             --target "$(git rev-parse HEAD)" \
             --title "T3 Code (Joe) $VERSION" \
-            --notes "Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") (latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install the .dmg once; later versions arrive through the app's updater."
+            --notes "Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") (latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install once from the .dmg (or the .zip if no .dmg is attached); later versions arrive through the app's updater."
 
       # The sync token cannot comment on issues; the job token can.
       - name: Close blocked-sync issues
