@@ -84,7 +84,8 @@ jobs:
   release:
     needs: check
     if: needs.check.outputs.skip != 'true'
-    runs-on: macos-26
+    # GitHub-hosted Apple Silicon runners stopped picking up this job; it builds on the owner's Mac.
+    runs-on: [self-hosted, macOS, ARM64, t3-release]
     timeout-minutes: 120
     env:
       TAG: ${{ needs.check.outputs.tag }}
