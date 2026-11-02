@@ -229,16 +229,19 @@ jobs:
           rustup target add aarch64-apple-darwin
           export APPLE_API_KEY="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
           printf '%s' "$APPLE_API_KEY_CONTENT" > "$APPLE_API_KEY"
-          # hdiutil can fail with "Resource temporarily unavailable" while Spotlight or a
-          # scanner holds the image on this self-hosted Mac; a fresh attempt clears it.
-          for attempt in 1 2 3; do
-            rm -rf release
-            node scripts/build-desktop-artifact.ts \
-              --platform mac --target dmg --arch arm64 --build-version "$VERSION" --signed && break
-            (( attempt < 3 )) || exit 1
-            echo "::warning::Build attempt $attempt failed; retrying"
-            sleep 15
-          done
+          # This Mac's endpoint security (Kandji) makes `hdiutil convert` fail, which the
+          # DMG builder needs. Build the updater zip, then make the installer DMG with
+          # `hdiutil create`, which works there.
+          rm -rf release
+          node scripts/build-desktop-artifact.ts \
+            --platform mac --target zip --arch arm64 --build-version "$VERSION" --signed
+          stage="$RUNNER_TEMP/dmg-stage"
+          rm -rf "$stage" && mkdir -p "$stage"
+          ditto -x -k release/*.zip "$stage"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "T3 Code (Joe) $VERSION" -srcfolder "$stage" \
+            -format UDZO -ov "release/T3-Code-$VERSION-arm64.dmg"
+          rm -rf "$stage"
           rm -f "$APPLE_API_KEY"
 
       - name: Publish release
