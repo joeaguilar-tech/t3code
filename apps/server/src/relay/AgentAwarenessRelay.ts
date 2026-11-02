@@ -343,6 +343,7 @@ export function resolvePresenceHold(input: {
   readonly enabled: boolean;
   readonly phase: RelayAgentActivityState["phase"] | undefined;
   readonly wasHeld: boolean;
+  readonly newlyRings: boolean;
   readonly dismissed: boolean;
   readonly completedAt: DateTime.Utc | null;
   readonly lastVisitedAt: DateTime.Utc | null;
@@ -353,6 +354,7 @@ export function resolvePresenceHold(input: {
   if (
     input.enabled &&
     present &&
+    (input.newlyRings || input.wasHeld) &&
     (terminal || input.phase === "waiting_for_approval" || input.phase === "waiting_for_input")
   ) {
     return "hold";
@@ -367,6 +369,21 @@ export function resolvePresenceHold(input: {
     return "dismiss";
   }
   return "release";
+}
+
+const isAttentionPhase = (phase: string | undefined) =>
+  phase === "waiting_for_approval" || phase === "waiting_for_input";
+const isTerminalPhase = (phase: string | undefined) => phase === "completed" || phase === "failed";
+
+// Mirrors the relay: only entering attention or terminal from outside it rings.
+function ringsAfter(publishedIdentity: string | undefined, phase: string | undefined): boolean {
+  const published: { readonly phase?: string } | null =
+    publishedIdentity === undefined ? null : JSON.parse(publishedIdentity);
+  const previous = published?.phase;
+  return (
+    (isAttentionPhase(phase) && !isAttentionPhase(previous)) ||
+    (isTerminalPhase(phase) && !isTerminalPhase(previous))
+  );
 }
 
 function terminalWorkSinceStart(thread: OrchestrationV2ThreadShell, startedAt: number): boolean {
@@ -618,6 +635,7 @@ export const make = Effect.gen(function* () {
       enabled: preferences?.holdPhoneAlertsWhilePresent ?? false,
       phase: snapshot.state?.phase,
       wasHeld: presenceHeldThreads.has(threadId),
+      newlyRings: ringsAfter(publishedStateByThread.get(threadId), snapshot.state?.phase),
       dismissed:
         terminalIdentity !== null && dismissedTerminalByThread.get(threadId) === terminalIdentity,
       completedAt:

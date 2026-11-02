@@ -629,13 +629,22 @@ describe("AgentAwarenessRelay", () => {
       expected: "publish",
     },
     { name: "failed run", power: hostPower(), phase: "failed", expected: "hold" },
-  ] as const)("presence decision: $name", ({ power, phase, expected }) => {
+    {
+      name: "already delivered approval",
+      power: hostPower(),
+      phase: "waiting_for_approval",
+      newlyRings: false,
+      expected: "publish",
+    },
+  ] as const)("presence decision: $name", (row) => {
+    const { power, phase, expected } = row;
     assert.equal(
       AgentAwarenessRelay.resolvePresenceHold({
         power,
         phase,
         enabled: true,
         wasHeld: false,
+        newlyRings: "newlyRings" in row ? row.newlyRings : true,
         dismissed: false,
         completedAt: null,
         lastVisitedAt: null,
