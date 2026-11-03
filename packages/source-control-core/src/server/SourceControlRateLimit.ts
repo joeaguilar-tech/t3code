@@ -67,7 +67,7 @@ export class SourceControlRateLimit extends Context.Service<
     ) => Effect.Effect<number, SourceControlRateLimitPausedError>;
     readonly recordRateLimit: (
       input: RateLimitLease & { readonly retryAt?: number | undefined },
-    ) => Effect.Effect<number>;
+    ) => Effect.Effect<void>;
     readonly recordSuccess: (input: RateLimitLease) => Effect.Effect<void>;
   }
 >()("@t3tools/source-control-core/server/SourceControlRateLimit") {}
@@ -120,20 +120,20 @@ export const make = Effect.gen(function* () {
   )(function* (input) {
     const now = yield* Clock.currentTimeMillis;
     const key = normalizedKey(input, yield* CredentialScope);
-    return yield* Ref.modify(entries, (current): [number, ReadonlyMap<string, RateLimitEntry>] => {
+    yield* Ref.update(entries, (current) => {
       const previous = current.get(key);
       if (previous !== undefined && previous.generation > input.lease) {
         if (previous.retryAt <= now && (input.retryAt === undefined || input.retryAt <= now)) {
-          return [previous.retryAt, current];
+          return current;
         }
         const retryAt =
           input.retryAt !== undefined && input.retryAt > previous.retryAt
             ? input.retryAt
             : previous.retryAt;
-        if (retryAt === previous.retryAt) return [retryAt, current];
+        if (retryAt === previous.retryAt) return current;
         const next = new Map(current);
         next.set(key, { ...previous, retryAt });
-        return [retryAt, next];
+        return next;
       }
 
       const attempt = (previous?.attempt ?? 0) + 1;
@@ -151,7 +151,7 @@ export const make = Effect.gen(function* () {
         generation: Math.max(previous?.generation ?? 0, input.lease) + 1,
         retryAt,
       });
-      return [retryAt, next];
+      return next;
     });
   });
 

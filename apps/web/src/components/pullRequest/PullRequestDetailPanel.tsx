@@ -122,7 +122,6 @@ import {
   latestPullRequestReviewOutcomes,
   loadingPullRequestCheckoutCommand,
   isPullRequestNotFound,
-  pullRequestRetryAt,
   isStackedPullRequestBase,
   pullRequestActionNeedsHostRefresh,
   pullRequestCheckoutCommand,
@@ -1722,7 +1721,6 @@ export function PullRequestDetailPanel({
                   error: `It may be an issue rather than a ${terminology.singular}, or this account can't see it.`,
                 }
               : { error: detailQuery.error })}
-            retryAt={pullRequestRetryAt(detailQuery.failure)}
             refreshing={detailQuery.isPending}
             onRetry={refreshDetail}
             {...(unavailableHostUrl

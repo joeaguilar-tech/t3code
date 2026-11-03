@@ -447,9 +447,6 @@ function toPullRequestErrorWith(
       operation,
       detail: error.detail,
       ...(error.reason === "not-found" ? { reason: "not-found" as const } : {}),
-      ...(error.reason === "rate-limited" && error.retryAt !== undefined
-        ? { retryAt: error.retryAt }
-        : {}),
       cause: error,
     });
   };
@@ -462,14 +459,12 @@ function withRateLimitBackoff(
   options?: { readonly viewerAllowsPause: boolean },
 ): PullRequestProviderApi {
   const key = { provider: api.kind, host };
-  // Untraced: it wraps every provider call, which already has its own span.
-  const protect = Effect.fnUntraced(function* <A>(
+  const protect = <A>(
     operation: string,
     effect: Effect.Effect<A, PullRequestProviderError>,
-    interactive: boolean,
-  ) {
-    const allowPaused = interactive || (yield* SourceControlRateLimit.Interactive);
-    const lease = yield* limits.check(key, allowPaused ? { allowPaused: true } : undefined).pipe(
+    allowPaused: boolean,
+  ) =>
+    limits.check(key, allowPaused ? { allowPaused: true } : undefined).pipe(
       Effect.mapError(
         (error) =>
           new PullRequestProviderError({
@@ -481,36 +476,22 @@ function withRateLimitBackoff(
             cause: error,
           }),
       ),
-    );
-    return yield* effect.pipe(
-      Effect.provideService(SourceControlRateLimit.Interactive, allowPaused),
-      Effect.tap(() => limits.recordSuccess({ ...key, lease })),
-      Effect.catchIf(
-        (error) => error.reason === "rate-limited",
-        (error) =>
-          limits
-            .recordRateLimit({
-              ...key,
-              lease,
-              ...(error.retryAt === undefined ? {} : { retryAt: error.retryAt }),
-            })
-            .pipe(
-              Effect.flatMap((retryAt) =>
-                Effect.fail(
-                  new PullRequestProviderError({
-                    provider: error.provider,
-                    operation: error.operation,
-                    reason: error.reason,
-                    detail: error.detail,
-                    retryAt,
-                    cause: error.cause,
-                  }),
-                ),
-              ),
-            ),
+      Effect.flatMap((lease) =>
+        effect.pipe(
+          Effect.provideService(SourceControlRateLimit.Interactive, allowPaused),
+          Effect.tap(() => limits.recordSuccess({ ...key, lease })),
+          Effect.tapError((error) =>
+            error.reason === "rate-limited"
+              ? limits.recordRateLimit({
+                  ...key,
+                  lease,
+                  ...(error.retryAt === undefined ? {} : { retryAt: error.retryAt }),
+                })
+              : Effect.void,
+          ),
+        ),
       ),
     );
-  });
   const wrap =
     <Args extends ReadonlyArray<unknown>, A>(
       operation: string,
