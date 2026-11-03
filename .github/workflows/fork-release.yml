@@ -238,6 +238,12 @@ jobs:
           stage="$RUNNER_TEMP/dmg-stage"
           rm -rf "$stage" && mkdir -p "$stage"
           ditto -x -k release/*.zip "$stage"
+          # electron-builder silently skips signing when it finds no trusted identity (e.g. the
+          # Developer ID G2 intermediate is missing), and installed apps then reject the update.
+          app=$(echo "$stage"/*.app)
+          codesign --verify --deep --strict "$app"
+          codesign -dv "$app" 2>&1 | grep -qx "TeamIdentifier=$APPLE_TEAM_ID" ||
+            { echo "::error::Release app is not signed by team $APPLE_TEAM_ID."; exit 1; }
           ln -s /Applications "$stage/Applications"
           for attempt in 1 2 3; do
             hdiutil create -volname "T3 Code (Joe) $VERSION" -srcfolder "$stage" \
