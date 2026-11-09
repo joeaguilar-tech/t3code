@@ -26,6 +26,8 @@ export function automationThreadKeys(
 export function automationThreadNeedsYou(
   shell: ThreadSnoozeShell & { readonly lastVisitedAt?: string | null },
 ): boolean {
+  // Unlike snoozing, a visit doesn't defer a question, so any open request still needs you.
+  if (shell.hasPendingUserInput || shell.source?.pendingRuntimeRequest != null) return true;
   // Reuse the snooze rule, with the last visit as the edge.
   return threadRaisedHandWhileSnoozed({ ...shell, snoozedAt: shell.lastVisitedAt ?? null });
 }
