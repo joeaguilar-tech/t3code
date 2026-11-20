@@ -141,7 +141,15 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      assert.deepEqual(persisted, SharedKeybindings.DEFAULT_KEYBINDINGS);
+      assert.deepEqual(
+        persisted,
+        SharedKeybindings.DEFAULT_KEYBINDINGS.filter(
+          (rule) => !rule.command.startsWith("sidebar.environment."),
+        ),
+      );
+      const keybindings = yield* Keybindings.Keybindings;
+      const state = yield* keybindings.loadConfigState;
+      assert.deepEqual(state.keybindings, SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS);
     }).pipe(Effect.provide(layerKeybindings())),
   );
 
@@ -214,6 +222,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
         yield* writeKeybindingsConfig(keybindingsConfigPath, [
           { key: "mod+shift+y", command: "terminal.toggle" },
+          { key: "ctrl+alt+e", command: "sidebar.environment.1" },
           { key: "mod+shift+r", command: "script.run-tests.run" },
           { key: "mod+shift+b", command: "script.custom-panel.run" },
           {
@@ -237,11 +246,30 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         );
 
         for (const defaultRule of SharedKeybindings.DEFAULT_KEYBINDINGS) {
-          assert.isTrue(byCommand.has(defaultRule.command), `expected ${defaultRule.command}`);
+          assert.equal(
+            byCommand.has(defaultRule.command),
+            !defaultRule.command.startsWith("sidebar.environment.") ||
+              defaultRule.command === "sidebar.environment.1",
+            `persisted ${defaultRule.command}`,
+          );
         }
         assert.isTrue(byCommand.has("script.run-tests.run"));
 
         const configState = yield* keybindings.loadConfigState;
+        assert.deepEqual(
+          configState.keybindings.filter((rule) => rule.command === "sidebar.environment.1"),
+          SharedKeybindings.compileResolvedKeybindingsConfig([
+            { key: "ctrl+alt+e", command: "sidebar.environment.1" },
+          ]),
+        );
+        for (const rule of SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS) {
+          if (
+            rule.command.startsWith("sidebar.environment.") &&
+            rule.command !== "sidebar.environment.1"
+          ) {
+            assert.include(configState.keybindings, rule);
+          }
+        }
         assert.deepEqual(
           configState.keybindings
             .filter((entry) => entry.shortcut.key === "b" && entry.shortcut.shiftKey)

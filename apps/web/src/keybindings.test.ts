@@ -929,19 +929,26 @@ describe("Usage shortcuts", () => {
     { digit: 4, command: "sidebar.environment.4", usageCommand: "usage.period.quarter" },
     { digit: 9, command: "sidebar.environment.9", usageCommand: null },
   ])("routes shifted digit $digit by Usage context", ({ digit, command, usageCommand }) => {
-    const shortcut = event({ key: "!", code: `Digit${digit}`, ctrlKey: true, shiftKey: true });
-    assert.strictEqual(
-      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
-        platform: "Linux",
-        context: { usagePageOpen: true },
-      }),
-      usageCommand,
-    );
-    assert.strictEqual(
-      resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
-        platform: "Linux",
-      }),
-      command,
-    );
+    for (const platform of ["Linux", "MacIntel"]) {
+      const shortcut = event({ key: "!", code: `Digit${digit}`, ctrlKey: true, shiftKey: true });
+      assert.strictEqual(
+        resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+        command,
+      );
+      const usageShortcut = event({
+        key: "!",
+        code: `Digit${digit}`,
+        ctrlKey: platform === "Linux",
+        metaKey: platform === "MacIntel",
+        shiftKey: true,
+      });
+      assert.strictEqual(
+        resolveShortcutCommand(usageShortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform,
+          context: { usagePageOpen: true },
+        }),
+        usageCommand,
+      );
+    }
   });
 });
