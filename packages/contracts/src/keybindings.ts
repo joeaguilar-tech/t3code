@@ -36,6 +36,10 @@ export const SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS = [
 export type SidebarEnvironmentKeybindingCommand =
   (typeof SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS)[number];
 
+// Fork-only: keep these defaults out of the shared user configuration file.
+export const isForkOnlyKeybindingCommand = (command: string): boolean =>
+  SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.some((candidate) => candidate === command);
+
 export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
   "modelPicker.jump.1",
   "modelPicker.jump.2",

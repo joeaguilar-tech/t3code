@@ -50,7 +50,6 @@ import {
   type FilesystemBrowseResult,
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
-  SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -174,7 +173,7 @@ import {
   newProjectId,
 } from "../lib/utils";
 import { buildThreadRouteParams } from "../threadRoutes";
-import { useUiStateStore } from "../uiStateStore";
+import { buildSidebarEnvironmentPaletteItems } from "./Sidebar.environment";
 import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
 import {
   applyWslEnvironmentConfiguration,
@@ -1265,31 +1264,12 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
-  // Fork-only sidebar filter actions share the shortcut ordering.
-  if (environmentIdentities.length > 1) {
-    actionItems.push({
-      kind: "action",
-      value: "action:sidebar-environment:all",
-      title: "Show all environments",
-      searchTerms: ["sidebar", "environment", "filter"],
-      icon: <FolderIcon className={ITEM_ICON_CLASS} />,
-      shortcutCommand: "sidebar.environment.all",
-      run: async () => useUiStateStore.getState().setSidebarEnvironmentId(null),
-    });
-    environmentIdentities.forEach((environment, index) => {
-      const shortcutCommand = SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS[index + 1];
-      actionItems.push({
-        kind: "action",
-        value: `action:sidebar-environment:${environment.environmentId}`,
-        title: `Show only ${environment.label}`,
-        searchTerms: ["sidebar", "environment", "filter", environment.label],
-        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
-        ...(shortcutCommand ? { shortcutCommand } : {}),
-        run: async () =>
-          useUiStateStore.getState().setSidebarEnvironmentId(environment.environmentId),
-      });
-    });
-  }
+  actionItems.push(
+    ...buildSidebarEnvironmentPaletteItems(
+      environmentIdentities,
+      <FolderIcon className={ITEM_ICON_CLASS} />,
+    ),
+  );
 
   if (projects.length > 0) {
     const activeProjectTitle =

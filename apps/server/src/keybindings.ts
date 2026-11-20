@@ -1,5 +1,6 @@
 import {
   KeybindingRule,
+  isForkOnlyKeybindingCommand,
   KeybindingsConfigError,
   KeybindingShortcut,
   KeybindingWhenNode,
@@ -93,6 +94,10 @@ function keybindingRuleIdentity(rule: KeybindingRule): string {
 function isSameKeybindingRule(left: KeybindingRule, right: KeybindingRule): boolean {
   return keybindingRuleIdentity(left) === keybindingRuleIdentity(right);
 }
+
+const PERSISTED_DEFAULT_KEYBINDINGS = DEFAULT_KEYBINDINGS.filter(
+  (rule) => !isForkOnlyKeybindingCommand(rule.command),
+);
 
 const LATE_DEFAULT_KEYBINDINGS: ReadonlyArray<{
   readonly id: string;
@@ -449,7 +454,7 @@ const make = Effect.gen(function* () {
       );
       const configExists = yield* readConfigExists;
       if (!configExists) {
-        yield* writeConfigAtomically(DEFAULT_KEYBINDINGS);
+        yield* writeConfigAtomically(PERSISTED_DEFAULT_KEYBINDINGS);
         if (pendingLateDefaults.length > 0) {
           yield* recordAppliedMigrations([
             ...appliedMigrationIds,
@@ -481,7 +486,7 @@ const make = Effect.gen(function* () {
         key: string;
         when: string | null;
       }> = [];
-      for (const defaultRule of DEFAULT_KEYBINDINGS) {
+      for (const defaultRule of PERSISTED_DEFAULT_KEYBINDINGS) {
         if (existingCommands.has(defaultRule.command)) {
           continue;
         }

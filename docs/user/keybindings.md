@@ -53,10 +53,10 @@ in Settings.
 
 ## Sidebar environment filter
 
-Use `mod+shift+0` to show all environments and `mod+shift+1` through
-`mod+shift+9` to show only the corresponding environment in the sidebar menu's
-order. A number beyond the environment count does nothing. On the Usage page,
-`mod+shift+1` through `mod+shift+4` select Usage periods instead.
+Use `ctrl+shift+0` to show all environments and `ctrl+shift+1` through
+`ctrl+shift+9` to show only the corresponding environment in the sidebar menu's
+order. Ctrl means the Control key on every platform (⌃⇧ on macOS). A number beyond the environment count does nothing. On the Usage page,
+`mod+shift+1` through `mod+shift+4` select Usage periods.
 
 With multiple environments, the command palette offers **Show all environments**
 and **Show only <environment label>**. Change these shortcuts in

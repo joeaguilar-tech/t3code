@@ -149,7 +149,10 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       );
       const keybindings = yield* Keybindings.Keybindings;
       const state = yield* keybindings.loadConfigState;
-      assert.deepEqual(state.keybindings, SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS);
+      assert.sameDeepMembers(
+        [...state.keybindings],
+        [...SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS],
+      );
     }).pipe(Effect.provide(layerKeybindings())),
   );
 

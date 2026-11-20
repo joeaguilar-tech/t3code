@@ -142,7 +142,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     when: "modelPickerOpen && isDesktop",
   })),
   ...SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.map((command, index) => ({
-    key: `mod+shift+${index}`,
+    key: `ctrl+shift+${index}`,
     command,
     when: "!usagePageOpen",
   })),

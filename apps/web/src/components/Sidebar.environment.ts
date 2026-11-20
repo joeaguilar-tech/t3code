@@ -1,5 +1,8 @@
 // Fork-only: sidebar environment filter.
-import type { EnvironmentId } from "@t3tools/contracts";
+import { SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS, type EnvironmentId } from "@t3tools/contracts";
+import type { ReactNode } from "react";
+import type { CommandPaletteActionItem } from "./CommandPalette.logic";
+import { useUiStateStore } from "../uiStateStore";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "./Sidebar.logic";
@@ -58,4 +61,35 @@ export function environmentForShortcutIndex(
   index: number,
 ): EnvironmentId | null {
   return environments[index - 1]?.environmentId ?? null;
+}
+
+export function buildSidebarEnvironmentPaletteItems(
+  environments: readonly { environmentId: EnvironmentId; label: string }[],
+  icon: ReactNode,
+): CommandPaletteActionItem[] {
+  if (environments.length <= 1) return [];
+  return [
+    {
+      kind: "action",
+      value: "action:sidebar-environment:all",
+      title: "Show all environments",
+      searchTerms: ["sidebar", "environment", "filter"],
+      icon,
+      shortcutCommand: "sidebar.environment.all",
+      run: async () => useUiStateStore.getState().setSidebarEnvironmentId(null),
+    },
+    ...environments.map((environment, index): CommandPaletteActionItem => {
+      const shortcutCommand = SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS[index + 1];
+      return {
+        kind: "action",
+        value: `action:sidebar-environment:${environment.environmentId}`,
+        title: `Show only ${environment.label}`,
+        searchTerms: ["sidebar", "environment", "filter", environment.label],
+        icon,
+        ...(shortcutCommand ? { shortcutCommand } : {}),
+        run: async () =>
+          useUiStateStore.getState().setSidebarEnvironmentId(environment.environmentId),
+      };
+    }),
+  ];
 }
