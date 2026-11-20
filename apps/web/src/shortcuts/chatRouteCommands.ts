@@ -1,4 +1,8 @@
-import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
+import {
+  AuthPreviewOperateScope,
+  SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -7,6 +11,7 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { dispatchPreviewAction, type PreviewAction } from "../components/preview/previewActionBus";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
+import { environmentForShortcutIndex } from "../components/Sidebar.environment";
 import { shouldCreateNewThreadInCurrentProject } from "../components/Sidebar.logic";
 import { createNewThreadHandler, resolveDefaultProjectRef } from "../hooks/useHandleNewThread";
 import { createScratchProjectActions } from "../hooks/useScratchProject";
@@ -17,14 +22,14 @@ import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { readProjects, readThreadShell } from "../state/entities";
-import { environmentPresentations } from "../state/presentation";
+import { environmentPresentations, environmentSummaries } from "../state/presentation";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
 import { readEnvironmentScope } from "../state/session";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { useUiStateStore } from "../uiStateStore";
-import { type CommandHandler, registerCommands } from "./dispatcher";
+import { type CommandHandler, type CommandHandlers, registerCommands } from "./dispatcher";
 
 const CHAT_ROUTE_ID = "/_chat";
 
@@ -110,8 +115,26 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       if (threadRef && canOperatePreview(threadRef.environmentId)) dispatchPreviewAction(action);
     };
 
+  // Fork-only filter commands follow the same catalog order as the sidebar menu.
+  const environmentCommands: CommandHandlers = {};
+  for (const [index, command] of SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.entries()) {
+    environmentCommands[command] = (event) => {
+      const environmentId =
+        index === 0
+          ? null
+          : environmentForShortcutIndex(
+              appAtomRegistry.get(environmentSummaries.identitiesAtom),
+              index,
+            );
+      if (index !== 0 && environmentId === null) return false;
+      claim(event);
+      useUiStateStore.getState().setSidebarEnvironmentId(environmentId);
+    };
+  }
+
   return registerCommands(
     {
+      ...environmentCommands,
       "chat.newLocal": startNewLocal,
       "chat.newWithoutProject": (event) => {
         const { activeThread, activeDraftThread } = readThreadContext();

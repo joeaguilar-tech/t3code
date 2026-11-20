@@ -51,6 +51,18 @@ on macOS and Ctrl on Windows and Linux, including GNOME, KDE Plasma, Niri, and
 Hyprland. If a custom desktop shortcut takes the same keys, choose another binding
 in Settings.
 
+## Sidebar environment filter
+
+Use `mod+shift+0` to show all environments and `mod+shift+1` through
+`mod+shift+9` to show only the corresponding environment in the sidebar menu's
+order. A number beyond the environment count does nothing. On the Usage page,
+`mod+shift+1` through `mod+shift+4` select Usage periods instead.
+
+With multiple environments, the command palette offers **Show all environments**
+and **Show only <environment label>**. Change these shortcuts in
+**Settings → Keybindings** under **Sidebar: Show All Environments** and
+**Sidebar: Show Only Environment 1** through **9**.
+
 ## Copy pull request references
 
 With a PR open in the right panel or on the Pull requests page, use `mod+shift+c`

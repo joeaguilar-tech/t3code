@@ -20,6 +20,22 @@ export const THREAD_JUMP_KEYBINDING_COMMANDS = [
 ] as const;
 export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMANDS)[number];
 
+// Fork-only sidebar environment filter commands.
+export const SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS = [
+  "sidebar.environment.all",
+  "sidebar.environment.1",
+  "sidebar.environment.2",
+  "sidebar.environment.3",
+  "sidebar.environment.4",
+  "sidebar.environment.5",
+  "sidebar.environment.6",
+  "sidebar.environment.7",
+  "sidebar.environment.8",
+  "sidebar.environment.9",
+] as const;
+export type SidebarEnvironmentKeybindingCommand =
+  (typeof SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS)[number];
+
 export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
   "modelPicker.jump.1",
   "modelPicker.jump.2",
@@ -58,6 +74,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "workspace.focusNext",
   "workspace.focusPrevious",
   "sidebar.toggle",
+  ...SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
   "navigation.back",
   "navigation.forward",
   "terminal.toggle",

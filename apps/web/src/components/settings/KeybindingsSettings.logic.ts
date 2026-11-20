@@ -369,6 +369,10 @@ export function buildKeybindingCommandOptions(
 }
 
 export function commandLabel(command: KeybindingCommand): string {
+  if (command === "sidebar.environment.all") return "Sidebar: Show All Environments";
+  if (command.startsWith("sidebar.environment.")) {
+    return `Sidebar: Show Only Environment ${command.split(".").at(-1)}`;
+  }
   if (command === "workspace.focusNext") return "Focus Next Workspace Area";
   if (command === "workspace.focusPrevious") return "Focus Previous Workspace Area";
   if (command === "composer.sendAlternate") return "Composer: Opposite Queue or Steer Action";

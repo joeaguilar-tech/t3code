@@ -8,6 +8,7 @@ import {
   type ResolvedKeybindingRule,
   type ResolvedKeybindingsConfig,
   THREAD_JUMP_KEYBINDING_COMMANDS,
+  SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
 } from "@t3tools/contracts";
 
 export {
@@ -139,6 +140,11 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     key: `mod+${index + 1}`,
     command,
     when: "modelPickerOpen && isDesktop",
+  })),
+  ...SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.map((command, index) => ({
+    key: `mod+shift+${index}`,
+    command,
+    when: "!usagePageOpen",
   })),
   { key: "c", command: "usage.cost", when: "usagePageOpen" },
   { key: "t", command: "usage.tokens", when: "usagePageOpen" },
