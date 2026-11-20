@@ -4,6 +4,7 @@ import {
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 
+import { filterToEnvironment } from "./Sidebar.environment";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useClientSettings } from "../hooks/useSettings";
 import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
@@ -53,7 +54,10 @@ export const selectCommandPaletteClientSettings = (settings: ClientSettings) => 
   sidebarThreadSortOrder: settings.sidebarThreadSortOrder,
 });
 
-export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<EnvironmentId, string>) {
+export function useSortedProjectGroups(
+  environmentLabelById: ReadonlyMap<EnvironmentId, string>,
+  environmentId: EnvironmentId | null = null,
+) {
   const projects = useProjects();
   const threads = useVisibleThreadShells();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -64,7 +68,7 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
     sidebarProjectGroupingOverrides: clientSettings.sidebarProjectGroupingOverrides,
   };
   const orderedProjects = orderItemsByPreferredIds({
-    items: projects,
+    items: filterToEnvironment(projects, environmentId),
     preferredIds: projectOrder,
     getId: getProjectOrderKey,
     getPreferenceIds: (project) => [
@@ -73,7 +77,10 @@ export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<Environ
     ],
   });
   const unsortedProjectGroups = buildSidebarProjectSnapshots({
-    projects: clientSettings.sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+    projects:
+      clientSettings.sidebarProjectSortOrder === "manual"
+        ? orderedProjects
+        : filterToEnvironment(projects, environmentId),
     settings: projectGroupingSettings,
     primaryEnvironmentId,
     resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,

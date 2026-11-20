@@ -5,6 +5,8 @@ import type {
   ProjectId,
   ScopedProjectRef,
 } from "@t3tools/contracts";
+import { readSidebarEnvironmentId } from "../hooks/useSidebarEnvironmentScope";
+import { resolveSidebarNewThreadProjectRef } from "../components/Sidebar.environment";
 import type { ComposerThreadDraftState, DraftThreadEnvMode } from "../composerDraftStore";
 
 type ComposerModelSelectionState = Pick<
@@ -85,7 +87,11 @@ export function resolveThreadActionProjectRef(
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
 ): Promise<boolean> {
-  const projectRef = resolveThreadActionProjectRef(context);
+  const projectRef = resolveSidebarNewThreadProjectRef(
+    resolveThreadActionProjectRef(context),
+    context.defaultProjectRef,
+    readSidebarEnvironmentId(),
+  );
   if (!projectRef) {
     return false;
   }

@@ -7,6 +7,8 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { dispatchPreviewAction, type PreviewAction } from "../components/preview/previewActionBus";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
+import { filterToEnvironment } from "../components/Sidebar.environment";
+import { readSidebarEnvironmentId } from "../hooks/useSidebarEnvironmentScope";
 import { shouldCreateNewThreadInCurrentProject } from "../components/Sidebar.logic";
 import { createNewThreadHandler, resolveDefaultProjectRef } from "../hooks/useHandleNewThread";
 import { createScratchProjectActions } from "../hooks/useScratchProject";
@@ -73,6 +75,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       defaultProjectRef: resolveDefaultProjectRef(
         readProjects(),
         useUiStateStore.getState().projectOrder,
+        readSidebarEnvironmentId(),
       ),
       handleNewThread,
     };
@@ -80,7 +83,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
   // Grouped like the sidebar, so the shortcut and the New thread button agree.
   const readProjectGroups = () =>
     buildSidebarProjectSnapshots({
-      projects: readProjects(),
+      projects: filterToEnvironment(readProjects(), readSidebarEnvironmentId()),
       groupScratchProjects: true,
       settings: selectProjectGroupingSettings(getClientSettings()),
       primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
@@ -116,7 +119,9 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       "chat.newWithoutProject": (event) => {
         const { activeThread, activeDraftThread } = readThreadContext();
         const environmentId = scratch.scratchEnvironmentId(
-          activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null,
+          activeThread?.environmentId ??
+            activeDraftThread?.environmentId ??
+            readSidebarEnvironmentId(),
         );
         if (environmentId === null) return;
         claim(event);

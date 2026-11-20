@@ -36,6 +36,8 @@ import {
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { isProjectPinShortcut, ProjectPinButton } from "../ProjectPinButton";
+import { useSidebarEnvironmentScope } from "~/hooks/useSidebarEnvironmentScope";
+import { filterToEnvironment } from "../Sidebar.environment";
 import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
 import {
   Combobox,
@@ -75,6 +77,7 @@ export function DraftHeroHeadline({
   activeProjectTitle,
 }: DraftHeroHeadlineProps) {
   const projects = useProjects();
+  const { effectiveEnvironmentId } = useSidebarEnvironmentScope();
   const threads = useVisibleThreadShells();
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
@@ -106,7 +109,7 @@ export function DraftHeroHeadline({
   );
   const projectGroups = sortLogicalProjectsForSidebar(
     buildSidebarProjectSnapshots({
-      projects,
+      projects: filterToEnvironment(projects, effectiveEnvironmentId),
       settings: projectGroupingSettings,
       primaryEnvironmentId,
       resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,

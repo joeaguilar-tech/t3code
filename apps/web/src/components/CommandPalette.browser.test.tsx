@@ -22,6 +22,7 @@ vi.mock("../state/entities", async (original) => ({
 
 vi.mock("../hooks/useSidebarEnvironmentScope", () => ({
   useSidebarEnvironmentScope: () => ({ effectiveEnvironmentId: entities.selectedEnvironmentId }),
+  readSidebarEnvironmentId: () => entities.selectedEnvironmentId,
 }));
 
 function setup(state: { projects?: ReadonlyArray<Project>; threads?: ReadonlyArray<Thread> } = {}) {
@@ -147,7 +148,7 @@ describe("CommandPalette open intents", () => {
         }),
       ],
     });
-    await using _screen = await render(<CommandPalette>{null}</CommandPalette>);
+    await using screen = await render(<CommandPalette>{null}</CommandPalette>);
 
     openCommandPalette({ query: "Acme" });
     await page.getByRole("option", { name: /Acme/ }).first().click();

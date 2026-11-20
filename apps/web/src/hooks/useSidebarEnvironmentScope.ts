@@ -1,6 +1,8 @@
 // Fork-only: sidebar environment filter.
 import { resolveEffectiveSidebarEnvironmentId } from "../components/Sidebar.environment";
 import { useEnvironmentIdentities } from "../state/environments";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { environmentSummaries } from "../state/presentation";
 import { useUiStateStore } from "../uiStateStore";
 
 export function useSidebarEnvironmentScope() {
@@ -16,4 +18,15 @@ export function useSidebarEnvironmentScope() {
     savedEnvironmentId,
     setEnvironmentId,
   };
+}
+
+export function readSidebarEnvironmentId() {
+  return resolveEffectiveSidebarEnvironmentId(
+    useUiStateStore.getState().sidebarEnvironmentId,
+    new Set(
+      appAtomRegistry
+        .get(environmentSummaries.identitiesAtom)
+        .map((environment) => environment.environmentId),
+    ),
+  );
 }
