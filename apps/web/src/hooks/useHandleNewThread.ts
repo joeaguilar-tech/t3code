@@ -1,9 +1,14 @@
 import {
   scopedProjectKey,
-  scopeProjectRef,
   scopeThreadRef,
+  scopeProjectRef,
 } from "@t3tools/client-runtime/environment";
-import { DEFAULT_SERVER_SETTINGS, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  type EnvironmentId,
+  type ScopedProjectRef,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { type AnyRouter, useRouter } from "@tanstack/react-router";
 import {
   composerDraftHasUserContent,
@@ -13,8 +18,10 @@ import {
   type DraftThreadState,
   useComposerDraftStore,
 } from "../composerDraftStore";
-import { newDraftId, newThreadId } from "../lib/utils";
 import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
+import { newDraftId, newThreadId } from "../lib/utils";
+import { filterToEnvironment } from "../components/Sidebar.environment";
+import { useSidebarEnvironmentScope } from "./useSidebarEnvironmentScope";
 import {
   deriveLogicalProjectKeyFromSettings,
   getProjectOrderKey,
@@ -426,9 +433,12 @@ export function createNewThreadHandler(router: AnyRouter) {
 export function resolveDefaultProjectRef(
   projects: ReadonlyArray<EnvironmentProject>,
   projectOrder: readonly string[],
+  environmentId: EnvironmentId | null = null,
 ): ScopedProjectRef | null {
   const [defaultProject] = orderItemsByPreferredIds({
-    items: projects.filter((project) => project.archivedAt == null),
+    items: filterToEnvironment(projects, environmentId).filter(
+      (project) => project.archivedAt == null,
+    ),
     preferredIds: projectOrder,
     getId: getProjectOrderKey,
     getPreferenceIds: (project) => [
@@ -440,6 +450,7 @@ export function resolveDefaultProjectRef(
 }
 
 export function useHandleNewThread() {
+  const { effectiveEnvironmentId } = useSidebarEnvironmentScope();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const routeTarget = useThreadRouteTarget();
   const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
@@ -455,7 +466,11 @@ export function useHandleNewThread() {
   );
   const projects = useProjects();
   const handleNewThread = useNewThreadHandler();
-  const defaultProjectRef = resolveDefaultProjectRef(projects, projectOrder);
+  const defaultProjectRef = resolveDefaultProjectRef(
+    projects,
+    projectOrder,
+    effectiveEnvironmentId,
+  );
 
   return {
     activeDraftThread,

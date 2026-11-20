@@ -1,10 +1,12 @@
-import { EnvironmentId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
+import { resolveDefaultProjectRef } from "../hooks/useHandleNewThread";
+import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { describe, expect, it } from "vite-plus/test";
 import { makeThreadFixture } from "../test-fixtures";
 import {
   environmentForShortcutIndex,
   filterToEnvironment,
+  resolveSidebarNewThreadProjectRef,
   resolveEffectiveSidebarEnvironmentId,
   resolveHiddenEnvironmentDots,
 } from "./Sidebar.environment";
@@ -86,5 +88,57 @@ describe("sidebar environment filter", () => {
         [work, "attention"],
       ]),
     );
+  });
+});
+
+describe("new thread environment choice", () => {
+  const project = (environmentId: EnvironmentId, id: string, archivedAt: string | null = null) => ({
+    environmentId,
+    id: ProjectId.make(id),
+    workspaceRoot: `/work/${id}`,
+    title: id,
+    defaultModelSelection: null,
+    scripts: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt,
+  });
+  const projects = [
+    project(personal, "personal"),
+    project(work, "older"),
+    project(work, "recent"),
+    project(work, "archived", "2026-01-01"),
+  ];
+  const order = [
+    "legacy-project-cwd:/work/archived",
+    "legacy-project-cwd:/work/recent",
+    "legacy-project-cwd:/work/older",
+  ];
+  it.each([
+    {
+      current: { environmentId: work, projectId: ProjectId.make("older") },
+      environmentId: work,
+      want: "older",
+    },
+    {
+      current: { environmentId: personal, projectId: ProjectId.make("personal") },
+      environmentId: work,
+      want: "recent",
+    },
+    { current: null, environmentId: work, want: "recent" },
+    {
+      current: { environmentId: personal, projectId: ProjectId.make("personal") },
+      environmentId: null,
+      want: "personal",
+    },
+    { current: null, environmentId: EnvironmentId.make("empty"), want: null },
+  ])("selects $want with environment $environmentId", ({ current, environmentId, want }) => {
+    expect(
+      resolveSidebarNewThreadProjectRef(
+        current,
+        resolveDefaultProjectRef(projects, order, environmentId),
+        environmentId,
+      )?.projectId ?? null,
+    ).toBe(want);
   });
 });

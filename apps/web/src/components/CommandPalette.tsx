@@ -1,3 +1,4 @@
+import { useSidebarEnvironmentScope } from "../hooks/useSidebarEnvironmentScope";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
@@ -472,6 +473,7 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const { effectiveEnvironmentId } = useSidebarEnvironmentScope();
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
@@ -534,7 +536,10 @@ function OpenCommandPaletteDialog(props: {
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const { environmentLabelById, projectEnvironmentLocationById } = useEnvironmentLookups();
-  const projectGroups = useSortedProjectGroups(environmentLabelById);
+  const { projectGroups, newThreadProjectGroups } = useSortedProjectGroups(
+    environmentLabelById,
+    effectiveEnvironmentId,
+  );
   const contextualProjectRef = resolveThreadActionProjectRef({
     activeDraftThread,
     activeThread: activeThread ?? undefined,
@@ -555,13 +560,38 @@ function OpenCommandPaletteDialog(props: {
       group,
     ]),
   );
+  const newThreadPickerEntries =
+    effectiveEnvironmentId === null
+      ? projectPickerEntries
+      : buildSidebarProjectPickerEntries({
+          groups: pickableProjectGroups(newThreadProjectGroups),
+          preferredProjectRef: contextualProjectRef,
+        });
+  const newThreadPickerProjects =
+    effectiveEnvironmentId === null
+      ? pickerProjects
+      : newThreadPickerEntries.map(({ group, targetProject }) => ({
+          ...targetProject,
+          displayName: group.displayName,
+        }));
+  const newThreadGroupByTargetKey =
+    effectiveEnvironmentId === null
+      ? projectGroupByTargetKey
+      : new Map(
+          newThreadPickerEntries.map(({ group, targetProject }) => [
+            `${targetProject.environmentId}:${targetProject.id}`,
+            group,
+          ]),
+        );
   const { canPinProjectGroup, toggleProjectGroupPin } = useProjectPin();
   // A row's target record can change when another machine's copy loads, so the kept
   // order follows the project group instead.
-  const rowOrderKey = (prefix: string) => (item: CommandPaletteActionItem) =>
-    projectGroupByTargetKey.get(item.value.slice(prefix.length + 1))?.projectKey ?? item.value;
-  const projectPin = (project: CommandPaletteProject) => {
-    const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+  const rowOrderKey =
+    (prefix: string, groups = projectGroupByTargetKey) =>
+    (item: CommandPaletteActionItem) =>
+      groups.get(item.value.slice(prefix.length + 1))?.projectKey ?? item.value;
+  const projectPin = (project: CommandPaletteProject, groups = projectGroupByTargetKey) => {
+    const group = groups.get(`${project.environmentId}:${project.id}`);
     return group && canPinProjectGroup(group)
       ? {
           name: group.displayName,
@@ -682,7 +712,9 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectEnvironmentId =
     activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null;
   const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
-  const scratchTargetEnvironmentId = scratchEnvironmentId(currentProjectEnvironmentId);
+  const scratchTargetEnvironmentId = scratchEnvironmentId(
+    currentProjectEnvironmentId ?? effectiveEnvironmentId,
+  );
   const supportsTriage = (environmentId: EnvironmentId | null) =>
     environments.find((environment) => environment.environmentId === environmentId)?.serverConfig
       ?.environment.capabilities.triage === true;
@@ -834,17 +866,17 @@ function OpenCommandPaletteDialog(props: {
       const currentEntry =
         currentProjectId === null
           ? undefined
-          : projectPickerEntries.find((entry) => entry.isPreferred);
+          : newThreadPickerEntries.find((entry) => entry.isPreferred);
       const projectItems = buildNewThreadInProjectItems({
-        projects: pickerProjects.filter((project) => !isScratch(project)),
+        projects: newThreadPickerProjects.filter((project) => !isScratch(project)),
         currentProjectKey: currentEntry
           ? `${currentEntry.targetProject.environmentId}:${currentEntry.targetProject.id}`
           : null,
-        projectGroupByTargetKey,
+        projectGroupByTargetKey: newThreadGroupByTargetKey,
         locationByEnvironmentId: projectEnvironmentLocationById,
-        pin: projectPin,
+        pin: (project) => projectPin(project, newThreadGroupByTargetKey),
         runProject: async (project) => {
-          const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+          const group = newThreadGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
           const contextualRefBelongsToGroup =
             contextualProjectRef !== null &&
             group?.memberProjectRefs.some(
@@ -862,7 +894,7 @@ function OpenCommandPaletteDialog(props: {
       if (scratchTargetEnvironmentId === null) return projectItems;
 
       const noProjectIndex = newThreadNoProjectIndex(
-        projectPickerEntries.map(({ group, targetProject, isPreferred }) => ({
+        newThreadPickerEntries.map(({ group, targetProject, isPreferred }) => ({
           isScratch: isScratchProject(
             targetProject,
             scratchWorkspaceRootFor(targetProject.environmentId),
@@ -885,7 +917,7 @@ function OpenCommandPaletteDialog(props: {
         ...projectItems.slice(noProjectIndex),
       ];
     })(),
-    rowOrderKey("new-thread-in"),
+    rowOrderKey("new-thread-in", newThreadGroupByTargetKey),
     true,
   );
   // Jump shortcuts follow the rows as shown, so a pin cannot move a number to another row.

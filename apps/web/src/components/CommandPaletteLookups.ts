@@ -4,6 +4,7 @@ import {
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 
+import { filterToEnvironment } from "./Sidebar.environment";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useClientSettings } from "../hooks/useSettings";
 import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
@@ -53,34 +54,48 @@ export const selectCommandPaletteClientSettings = (settings: ClientSettings) => 
   sidebarThreadSortOrder: settings.sidebarThreadSortOrder,
 });
 
-export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<EnvironmentId, string>) {
+export function useSortedProjectGroups(
+  environmentLabelById: ReadonlyMap<EnvironmentId, string>,
+  environmentId: EnvironmentId | null = null,
+) {
   const projects = useProjects();
   const threads = useVisibleThreadShells();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const clientSettings = useClientSettings(selectCommandPaletteClientSettings);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const projectGroupingSettings = {
-    sidebarProjectGroupingMode: clientSettings.sidebarProjectGroupingMode,
-    sidebarProjectGroupingOverrides: clientSettings.sidebarProjectGroupingOverrides,
+  const sortProjectGroups = (scopedProjects: typeof projects) => {
+    const projectGroupingSettings = {
+      sidebarProjectGroupingMode: clientSettings.sidebarProjectGroupingMode,
+      sidebarProjectGroupingOverrides: clientSettings.sidebarProjectGroupingOverrides,
+    };
+    const orderedProjects = orderItemsByPreferredIds({
+      items: scopedProjects,
+      preferredIds: projectOrder,
+      getId: getProjectOrderKey,
+      getPreferenceIds: (project) => [
+        getProjectOrderKey(project),
+        legacyProjectCwdPreferenceKey(project.workspaceRoot),
+      ],
+    });
+    const unsortedProjectGroups = buildSidebarProjectSnapshots({
+      projects:
+        clientSettings.sidebarProjectSortOrder === "manual" ? orderedProjects : scopedProjects,
+      settings: projectGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+    });
+    return sortLogicalProjectsForSidebar(
+      unsortedProjectGroups,
+      threads,
+      clientSettings.sidebarProjectSortOrder,
+    );
   };
-  const orderedProjects = orderItemsByPreferredIds({
-    items: projects,
-    preferredIds: projectOrder,
-    getId: getProjectOrderKey,
-    getPreferenceIds: (project) => [
-      getProjectOrderKey(project),
-      legacyProjectCwdPreferenceKey(project.workspaceRoot),
-    ],
-  });
-  const unsortedProjectGroups = buildSidebarProjectSnapshots({
-    projects: clientSettings.sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
-    settings: projectGroupingSettings,
-    primaryEnvironmentId,
-    resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
-  });
-  return sortLogicalProjectsForSidebar(
-    unsortedProjectGroups,
-    threads,
-    clientSettings.sidebarProjectSortOrder,
-  );
+  const projectGroups = sortProjectGroups(projects);
+  return {
+    projectGroups,
+    newThreadProjectGroups:
+      environmentId === null
+        ? projectGroups
+        : sortProjectGroups(filterToEnvironment(projects, environmentId)),
+  };
 }

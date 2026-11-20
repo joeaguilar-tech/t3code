@@ -129,6 +129,11 @@ const testServerConfigs = () =>
     ["environment-ssh", { settings: testState.targetSettings }],
   ]);
 
+vi.mock("./useSidebarEnvironmentScope", () => ({
+  useSidebarEnvironmentScope: () => ({ effectiveEnvironmentId: null }),
+  readSidebarEnvironmentId: () => null,
+}));
+
 vi.mock("../rpc/atomRegistry", () => ({
   appAtomRegistry: {
     get: (atom: unknown) =>

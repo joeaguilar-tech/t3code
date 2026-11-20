@@ -1,3 +1,4 @@
+import { useUiStateStore } from "../../uiStateStore";
 import {
   type DesktopBridge,
   type DesktopPendingSnapShot,
@@ -13,10 +14,10 @@ import {
   type PersistedComposerImageAttachment,
   useComposerDraftStore,
 } from "../../composerDraftStore";
-import { useHandleNewThread } from "../../hooks/useHandleNewThread";
+import { resolveDefaultProjectRef, useHandleNewThread } from "../../hooks/useHandleNewThread";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { getClientSettings, useClientSettings } from "../../hooks/useSettings";
-import { readThreadShell } from "../../state/entities";
+import { readProjects, readThreadShell } from "../../state/entities";
 import { resolveThreadActionProjectRef } from "../../lib/chatThreadActions";
 import {
   beginSnapShotAnimation,
@@ -279,12 +280,15 @@ export function SnapShotCoordinator() {
       }
       settleTarget(routeTarget, null);
     }
-    const projectRef = resolveThreadActionProjectRef({
-      activeDraftThread,
-      activeThread: activeThread ?? undefined,
-      defaultProjectRef,
-      handleNewThread,
-    });
+    const projectRef = resolveThreadActionProjectRef(
+      {
+        activeDraftThread,
+        activeThread: activeThread ?? undefined,
+        defaultProjectRef,
+        handleNewThread,
+      },
+      resolveDefaultProjectRef(readProjects(), useUiStateStore.getState().projectOrder),
+    );
     if (!projectRef) return null;
     const created = await handleNewThread(projectRef);
     if (!created) return null;

@@ -10,6 +10,7 @@ import type { Project, Thread } from "../types";
 import { CommandPalette } from "./CommandPalette";
 
 const entities = vi.hoisted(() => ({
+  selectedEnvironmentId: null as EnvironmentId | null,
   projects: [] as ReadonlyArray<Project>,
   threads: [] as ReadonlyArray<Thread>,
 }));
@@ -19,8 +20,19 @@ vi.mock("../state/entities", async (original) => ({
   useVisibleThreadShells: () => entities.threads,
 }));
 
+vi.mock("../hooks/useSidebarEnvironmentScope", () => ({
+  useSidebarEnvironmentScope: () => ({ effectiveEnvironmentId: entities.selectedEnvironmentId }),
+  readSidebarEnvironmentId: () => entities.selectedEnvironmentId,
+}));
+
+vi.mock("../hooks/useProjectGroupUpdate", async (original) => ({
+  ...(await original<typeof import("../hooks/useProjectGroupUpdate")>()),
+  useProjectPin: () => ({ canPinProjectGroup: () => true, toggleProjectGroupPin: () => undefined }),
+}));
+
 function setup(state: { projects?: ReadonlyArray<Project>; threads?: ReadonlyArray<Thread> } = {}) {
   useCommandPaletteStore.setState(useCommandPaletteStore.getInitialState(), true);
+  entities.selectedEnvironmentId = null;
   entities.projects = state.projects ?? [];
   entities.threads = state.threads ?? [];
 }
@@ -66,6 +78,44 @@ describe("CommandPalette open intents", () => {
     await expect.element(page.getByPlaceholder("Search...")).toHaveFocus();
     await expect.element(page.getByRole("option").first()).toHaveAttribute("data-highlighted");
     await expect.element(page.getByRole("option").nth(1)).not.toHaveAttribute("data-highlighted");
+  });
+
+  it("scopes New thread in projects while keeping root project search global", async () => {
+    const project = (environmentId: string, title: string): Project => ({
+      id: ProjectId.make(title),
+      environmentId: EnvironmentId.make(environmentId),
+      title,
+      workspaceRoot: `/work/${title}`,
+      repositoryIdentity: {
+        canonicalKey: "github.com/example/shared",
+        locator: {
+          source: "git-remote",
+          remoteName: "origin",
+          remoteUrl: "https://github.com/example/shared.git",
+        },
+      },
+      defaultModelSelection: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+      scripts: [],
+    });
+    setup({
+      projects: [
+        project("personal", "PersonalProject"),
+        project("work", "WorkProject"),
+        { ...project("personal", "PersonalOnly"), repositoryIdentity: null },
+      ],
+    });
+    entities.selectedEnvironmentId = EnvironmentId.make("work");
+    await using _screen = await render(<CommandPalette>{null}</CommandPalette>);
+    openCommandPalette({ open: "new-thread-in" });
+    await expect.element(page.getByRole("option", { name: /WorkProject/ })).toBeVisible();
+    await expect.element(page.getByTitle(/^Pin WorkProject/)).toBeVisible();
+    await expect
+      .element(page.getByRole("option", { name: /PersonalProject/ }))
+      .not.toBeInTheDocument();
+    openCommandPalette({ query: "PersonalOnly" });
+    await expect.element(page.getByRole("option", { name: /PersonalOnly/ })).toBeVisible();
   });
 
   it("opens a search intent with its query in the focused input", async () => {

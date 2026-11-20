@@ -1,5 +1,9 @@
 // Fork-only: sidebar environment filter.
-import { SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS, type EnvironmentId } from "@t3tools/contracts";
+import {
+  SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
+  type EnvironmentId,
+  type ScopedProjectRef,
+} from "@t3tools/contracts";
 import type { ReactNode } from "react";
 import type { CommandPaletteActionItem } from "./CommandPalette.logic";
 import { useUiStateStore } from "../uiStateStore";
@@ -92,4 +96,14 @@ export function buildSidebarEnvironmentPaletteItems(
       };
     }),
   ];
+}
+
+export function resolveSidebarNewThreadProjectRef(
+  current: ScopedProjectRef | null,
+  fallback: ScopedProjectRef | null,
+  environmentId: EnvironmentId | null,
+): ScopedProjectRef | null {
+  return current && (environmentId === null || current.environmentId === environmentId)
+    ? current
+    : fallback;
 }

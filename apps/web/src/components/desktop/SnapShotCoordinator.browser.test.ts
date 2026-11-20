@@ -3,6 +3,7 @@ import { type DesktopBridge, EnvironmentId, ProjectId, ThreadId } from "@t3tools
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId, useComposerDraftStore } from "../../composerDraftStore";
+import { resolveThreadActionProjectRef } from "../../lib/chatThreadActions";
 import * as imageCompression from "../../lib/imageCompression";
 import {
   questionAttachmentDraftId,
@@ -91,6 +92,20 @@ describe("window capture failures", () => {
 });
 
 describe("window capture target resolution", () => {
+  it("falls back to the unfiltered project when the selected environment has no eligible project", () => {
+    using _env = setup();
+    expect(
+      resolveThreadActionProjectRef(
+        {
+          activeDraftThread: null,
+          activeThread: undefined,
+          defaultProjectRef: null,
+          handleNewThread: async () => undefined,
+        },
+        projectRef,
+      ),
+    ).toEqual(projectRef);
+  });
   it("follows a draft to its promoted server thread", () => {
     using _env = setup();
     const draftId = DraftId.make("snap-shot-draft");

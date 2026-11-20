@@ -5,6 +5,7 @@ import type {
   ProjectId,
   ScopedProjectRef,
 } from "@t3tools/contracts";
+import { resolveSidebarNewThreadProjectRef } from "../components/Sidebar.environment";
 import type { ComposerThreadDraftState, DraftThreadEnvMode } from "../composerDraftStore";
 
 type ComposerModelSelectionState = Pick<
@@ -69,6 +70,7 @@ export function hasExplicitComposerModelSelection(
 
 export function resolveThreadActionProjectRef(
   context: ChatThreadActionContext,
+  fallbackProjectRef: ScopedProjectRef | null = null,
 ): ScopedProjectRef | null {
   if (context.activeThread) {
     return scopeProjectRef(context.activeThread.environmentId, context.activeThread.projectId);
@@ -79,13 +81,18 @@ export function resolveThreadActionProjectRef(
       context.activeDraftThread.projectId,
     );
   }
-  return context.defaultProjectRef;
+  return context.defaultProjectRef ?? fallbackProjectRef;
 }
 
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
+  options?: { environmentId: EnvironmentId | null },
 ): Promise<boolean> {
-  const projectRef = resolveThreadActionProjectRef(context);
+  const projectRef = resolveSidebarNewThreadProjectRef(
+    resolveThreadActionProjectRef(context),
+    context.defaultProjectRef,
+    options?.environmentId ?? null,
+  );
   if (!projectRef) {
     return false;
   }

@@ -61,6 +61,9 @@ describe("new thread commands", () => {
     } else {
       expect(openPicker).not.toHaveBeenCalled();
       expect(startLocal).toHaveBeenCalledOnce();
+      expect(startLocal.mock.calls[0]?.[1]).toEqual(
+        scenario.command === "chat.new" ? { environmentId: null } : undefined,
+      );
     }
   });
 });
