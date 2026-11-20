@@ -1,0 +1,61 @@
+// Fork-only: sidebar environment filter.
+import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "./Sidebar.logic";
+
+export function resolveEffectiveSidebarEnvironmentId(
+  saved: EnvironmentId | null,
+  knownEnvironmentIds: ReadonlySet<EnvironmentId>,
+): EnvironmentId | null {
+  return saved !== null && knownEnvironmentIds.has(saved) ? saved : null;
+}
+
+export function filterToEnvironment<T extends { readonly environmentId: EnvironmentId }>(
+  items: readonly T[],
+  environmentId: EnvironmentId | null,
+): readonly T[] {
+  return environmentId === null
+    ? items
+    : items.filter((item) => item.environmentId === environmentId);
+}
+
+type EnvironmentDotThread = Parameters<typeof resolveSidebarFolderDot>[0][number] &
+  Pick<EnvironmentThreadShell, "environmentId" | "id">;
+
+export function resolveHiddenEnvironmentDots(
+  threads: readonly EnvironmentDotThread[],
+  effectiveEnvironmentId: EnvironmentId | null,
+  lastVisitedAtById: Readonly<Record<string, string>>,
+): ReadonlyMap<EnvironmentId, "attention" | "unread"> {
+  const dots = new Map<EnvironmentId, "attention" | "unread">();
+  if (effectiveEnvironmentId === null) return dots;
+  const hiddenByEnvironment = new Map<EnvironmentId, EnvironmentDotThread[]>();
+  for (const thread of threads) {
+    if (thread.environmentId === effectiveEnvironmentId) continue;
+    const hidden = hiddenByEnvironment.get(thread.environmentId) ?? [];
+    hidden.push(thread);
+    hiddenByEnvironment.set(thread.environmentId, hidden);
+  }
+  for (const [environmentId, hidden] of hiddenByEnvironment) {
+    const dot = resolveSidebarFolderDot(
+      hidden.map((thread) => ({
+        ...thread,
+        lastVisitedAt: resolveThreadLastVisitedAt(
+          thread.lastVisitedAt,
+          lastVisitedAtById[scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))],
+        ),
+      })),
+    );
+    if (dot === "attention" || dot === "failed") dots.set(environmentId, "attention");
+    else if (dot === "unread") dots.set(environmentId, "unread");
+  }
+  return dots;
+}
+
+export function environmentForShortcutIndex(
+  environments: readonly { environmentId: EnvironmentId }[],
+  index: number,
+): EnvironmentId | null {
+  return environments[index - 1]?.environmentId ?? null;
+}
