@@ -136,7 +136,7 @@ describe("new thread environment choice", () => {
     expect(
       resolveSidebarNewThreadProjectRef(
         current,
-        resolveDefaultProjectRef(projects, order, environmentId),
+        resolveDefaultProjectRef(projects, order, null, true, environmentId),
         environmentId,
       )?.projectId ?? null,
     ).toBe(want);

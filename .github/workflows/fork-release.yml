@@ -17,6 +17,10 @@ on:
         description: Release even if main hasn't changed since the last release
         type: boolean
         default: false
+      upstream_ref:
+        description: Upstream ref to merge (default main; use a release tag to release without nightly changes)
+        type: string
+        default: main
 
 permissions:
   contents: write
@@ -53,6 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force }}
+          INPUT_UPSTREAM_REF: ${{ inputs.upstream_ref }}
           EVENT: ${{ github.event_name }}
           HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
@@ -64,7 +69,7 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [[ "$EVENT" == "schedule" ]]; then upstream_ref="$tag"; else upstream_ref="main"; fi
+          if [[ "$EVENT" == "schedule" ]]; then upstream_ref="$tag"; else upstream_ref="${INPUT_UPSTREAM_REF:-main}"; fi
           echo "upstream_ref=$upstream_ref" >> "$GITHUB_OUTPUT"
           upstream_sha="$(gh api "repos/$UPSTREAM/commits/$upstream_ref" --jq .sha)"
           main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"

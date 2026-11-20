@@ -1,11 +1,9 @@
 // Fork-only: sidebar environment filter.
 import { useEffect } from "react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  filterSidebarV2VisibleThreads,
-  resolveSidebarRowThreadId,
-} from "../components/Sidebar.logic";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { resolveListedAncestorThreadRef } from "@t3tools/client-runtime/state/threads";
+import { filterSidebarV2VisibleThreads } from "../components/Sidebar.logic";
 import { resolveHiddenEnvironmentDots } from "../components/Sidebar.environment";
 import {
   pendingSidebarRouteReveal,
@@ -31,16 +29,7 @@ export function useSidebarEnvironmentFilter({
   const visibleThreads = filterSidebarV2VisibleThreads(allThreads, null, delegatedUnderParent);
   const environmentRouteKey =
     routeTarget?.kind === "server"
-      ? scopedThreadKey(
-          scopeThreadRef(
-            routeTarget.threadRef.environmentId,
-            resolveSidebarRowThreadId(
-              routeTarget.threadRef.threadId,
-              routeTarget.threadRef.environmentId,
-              allThreads,
-            ),
-          ),
-        )
+      ? scopedThreadKey(resolveListedAncestorThreadRef(routeTarget.threadRef, allThreads))
       : null;
   const environmentRevealPending =
     pendingSidebarRouteReveal(routeReveal, environmentRouteKey) !== null;
