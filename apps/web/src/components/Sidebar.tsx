@@ -3058,12 +3058,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     ) {
       if (isMobile) setOpenMobile(false);
       // With no current or open project, such as when every project is archived, pick one.
-      void startNewThreadFromContext({
-        activeDraftThread: newThreadContext.activeDraftThread,
-        activeThread: newThreadContext.activeThread ?? undefined,
-        defaultProjectRef: newThreadContext.defaultProjectRef,
-        handleNewThread,
-      }).then((started) => {
+      void startNewThreadFromContext(
+        {
+          activeDraftThread: newThreadContext.activeDraftThread,
+          activeThread: newThreadContext.activeThread ?? undefined,
+          defaultProjectRef: newThreadContext.defaultProjectRef,
+          handleNewThread,
+        },
+        // Plain click matches ⌘N; shift-click keeps the current project.
+        event?.shiftKey ? undefined : { environmentId: effectiveEnvironmentId },
+      ).then((started) => {
         if (!started) openCommandPalette({ open: "new-thread-in" });
       });
       return;

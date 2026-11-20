@@ -18,10 +18,12 @@ function EnvironmentDot({
         aria-hidden
         className={`block size-1.5 rounded-full ${dot === "attention" ? "bg-warning" : "bg-success"}`}
       />
-      <span className="sr-only">
-        {summary ? "Hidden environments have " : ""}
-        {dot === "attention" ? "threads needing attention" : "unread threads"}
-      </span>
+      {/* The trigger's label already announces the summary dot. */}
+      {summary ? null : (
+        <span className="sr-only">
+          {dot === "attention" ? "threads needing attention" : "unread threads"}
+        </span>
+      )}
     </span>
   );
 }

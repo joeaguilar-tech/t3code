@@ -1,7 +1,7 @@
 import {
   scopedProjectKey,
-  scopeThreadRef,
   scopeProjectRef,
+  scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -18,8 +18,8 @@ import {
   type DraftThreadState,
   useComposerDraftStore,
 } from "../composerDraftStore";
-import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import { newDraftId, newThreadId } from "../lib/utils";
+import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import { filterToEnvironment } from "../components/Sidebar.environment";
 import { useSidebarEnvironmentScope } from "./useSidebarEnvironmentScope";
 import {

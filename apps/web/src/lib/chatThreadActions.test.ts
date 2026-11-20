@@ -41,30 +41,26 @@ describe("chatThreadActions", () => {
       }),
     ).toEqual(PROJECT_DEFAULT_SELECTION);
   });
-});
 
-vi.mock("../hooks/useSidebarEnvironmentScope", () => ({
-  readSidebarEnvironmentId: () => EnvironmentId.make("work"),
-}));
-
-it("keeps explicit current-project actions while allowing the new-thread shortcut override", async () => {
-  const current = {
-    environmentId: EnvironmentId.make("personal"),
-    projectId: ProjectId.make("current"),
-  };
-  const fallback = {
-    environmentId: EnvironmentId.make("work"),
-    projectId: ProjectId.make("default"),
-  };
-  const handleNewThread = vi.fn(async () => undefined);
-  const context = {
-    activeThread: current,
-    activeDraftThread: null,
-    defaultProjectRef: fallback,
-    handleNewThread,
-  };
-  await startNewThreadFromContext(context);
-  expect(handleNewThread).toHaveBeenLastCalledWith(current);
-  await startNewThreadFromContext(context, { environmentId: fallback.environmentId });
-  expect(handleNewThread).toHaveBeenLastCalledWith(fallback);
+  it("keeps explicit current-project actions while allowing the new-thread shortcut override", async () => {
+    const current = {
+      environmentId: EnvironmentId.make("personal"),
+      projectId: ProjectId.make("current"),
+    };
+    const fallback = {
+      environmentId: EnvironmentId.make("work"),
+      projectId: ProjectId.make("default"),
+    };
+    const handleNewThread = vi.fn(async () => undefined);
+    const context = {
+      activeThread: current,
+      activeDraftThread: null,
+      defaultProjectRef: fallback,
+      handleNewThread,
+    };
+    await startNewThreadFromContext(context);
+    expect(handleNewThread).toHaveBeenLastCalledWith(current);
+    await startNewThreadFromContext(context, { environmentId: fallback.environmentId });
+    expect(handleNewThread).toHaveBeenLastCalledWith(fallback);
+  });
 });
