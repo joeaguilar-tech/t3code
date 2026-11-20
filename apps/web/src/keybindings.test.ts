@@ -921,19 +921,27 @@ describe("Usage shortcuts", () => {
     },
   );
 
-  it("matches shifted number keys for periods and only on Usage", () => {
-    const shortcut = event({ key: "!", code: "Digit1", ctrlKey: true, shiftKey: true });
+  it.each([
+    { digit: 0, command: "sidebar.environment.all", usageCommand: null },
+    { digit: 1, command: "sidebar.environment.1", usageCommand: "usage.period.day" },
+    { digit: 2, command: "sidebar.environment.2", usageCommand: "usage.period.week" },
+    { digit: 3, command: "sidebar.environment.3", usageCommand: "usage.period.month" },
+    { digit: 4, command: "sidebar.environment.4", usageCommand: "usage.period.quarter" },
+    { digit: 9, command: "sidebar.environment.9", usageCommand: null },
+  ])("routes shifted digit $digit by Usage context", ({ digit, command, usageCommand }) => {
+    const shortcut = event({ key: "!", code: `Digit${digit}`, ctrlKey: true, shiftKey: true });
     assert.strictEqual(
       resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
         platform: "Linux",
         context: { usagePageOpen: true },
       }),
-      "usage.period.day",
+      usageCommand,
     );
-    assert.isNull(
+    assert.strictEqual(
       resolveShortcutCommand(shortcut, DEFAULT_RESOLVED_KEYBINDINGS, {
         platform: "Linux",
       }),
+      command,
     );
   });
 });
