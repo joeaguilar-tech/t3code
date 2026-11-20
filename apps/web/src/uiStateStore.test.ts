@@ -254,7 +254,7 @@ describe("uiStateStore persistence", () => {
     persistState(makeUiState({ sidebarEnvironmentId: environmentId }));
     const persisted = JSON.parse(localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}");
     expect(parsePersistedState(persisted).sidebarEnvironmentId).toBe(environmentId);
-    for (const value of [undefined, null, "", 42, {}, []]) {
+    for (const value of [undefined, null, "", " ", 42, {}, []]) {
       expect(
         parsePersistedState({ sidebarEnvironmentId: value } as PersistedUiState)
           .sidebarEnvironmentId,

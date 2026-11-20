@@ -1,6 +1,8 @@
 import { Debouncer } from "@tanstack/react-pacer";
 import { EnvironmentId, type PullRequestMergeMethod } from "@t3tools/contracts";
 import { create } from "zustand";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { normalizeProjectPathForComparison } from "@t3tools/client-runtime/state/projects";
 
 export const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
@@ -98,6 +100,8 @@ function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
   );
 }
 
+const decodeEnvironmentId = Schema.decodeUnknownOption(EnvironmentId);
+
 function sanitizeOptionalKey(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
@@ -145,8 +149,6 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
       ? sanitizeStringArray(parsed.projectOrderCwds).map(legacyProjectCwdPreferenceKey)
       : sanitizeStringArray(parsed.projectOrder);
 
-  const sidebarEnvironmentId = sanitizeOptionalKey(parsed.sidebarEnvironmentId);
-
   return {
     projectExpandedById,
     projectOrder,
@@ -159,8 +161,7 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
     sidebarProjectScopeKeys: sanitizeStringArray(
       parsed.sidebarProjectScopeKeys ?? [parsed.sidebarProjectScopeKey],
     ),
-    sidebarEnvironmentId:
-      sidebarEnvironmentId === null ? null : EnvironmentId.make(sidebarEnvironmentId),
+    sidebarEnvironmentId: Option.getOrNull(decodeEnvironmentId(parsed.sidebarEnvironmentId)),
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,

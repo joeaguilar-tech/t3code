@@ -13,11 +13,9 @@ const work = EnvironmentId.make("work");
 const personal = EnvironmentId.make("personal");
 
 describe("sidebar environment filter", () => {
-  it("falls back while disconnected without losing the saved environment", () => {
-    const saved = work;
-    expect(resolveEffectiveSidebarEnvironmentId(saved, new Set([personal]))).toBeNull();
-    expect(saved).toBe(work);
-    expect(resolveEffectiveSidebarEnvironmentId(saved, new Set([work, personal]))).toBe(work);
+  it("reads an unknown saved environment as all environments", () => {
+    expect(resolveEffectiveSidebarEnvironmentId(work, new Set([personal]))).toBeNull();
+    expect(resolveEffectiveSidebarEnvironmentId(work, new Set([work, personal]))).toBe(work);
     expect(resolveEffectiveSidebarEnvironmentId(null, new Set([work]))).toBeNull();
   });
 
