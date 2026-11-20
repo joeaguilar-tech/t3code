@@ -1,6 +1,5 @@
-import { pendingSidebarRouteReveal } from "./sidebar/routeReveal";
-import { useSidebarEnvironmentScope } from "../hooks/useSidebarEnvironmentScope";
-import { filterToEnvironment, resolveHiddenEnvironmentDots } from "./Sidebar.environment";
+import { useSidebarEnvironmentFilter } from "../hooks/useSidebarEnvironmentFilter";
+import { filterToEnvironment, resolveEnvironmentDraftProjectKeys } from "./Sidebar.environment";
 import { SidebarEnvironmentFilter } from "./SidebarEnvironmentFilter";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
@@ -950,45 +949,12 @@ function readRouteThreadKey(router: AnyRouter): string | null {
 }
 
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
-  const environmentScope = useSidebarEnvironmentScope();
   const allThreads = useQuietThreadShells();
   const routeTarget = useThreadRouteTarget();
-  const environmentRouteKey =
-    routeTarget?.kind === "server"
-      ? scopedThreadKey(
-          scopeThreadRef(
-            routeTarget.threadRef.environmentId,
-            resolveSidebarRowThreadId(
-              routeTarget.threadRef.threadId,
-              routeTarget.threadRef.environmentId,
-              allThreads,
-            ),
-          ),
-        )
-      : null;
-  const environmentRevealPending =
-    pendingSidebarRouteReveal(routeReveal, environmentRouteKey) !== null;
-  const revealEnvironmentId =
-    environmentRevealPending &&
-    routeTarget?.kind === "server" &&
-    allThreads.some(
-      (thread) =>
-        thread.environmentId === routeTarget.threadRef.environmentId &&
-        thread.id === routeTarget.threadRef.threadId,
-    ) &&
-    environmentScope.effectiveEnvironmentId !== null &&
-    environmentScope.effectiveEnvironmentId !== routeTarget.threadRef.environmentId
-      ? routeTarget.threadRef.environmentId
-      : null;
-  const effectiveEnvironmentId = revealEnvironmentId ?? environmentScope.effectiveEnvironmentId;
+  const delegatedUnderParent = useDelegatedUnderParent();
+  const { effectiveEnvironmentId, hiddenEnvironmentDots, setEnvironmentId } =
+    useSidebarEnvironmentFilter({ routeReveal, routeTarget, allThreads, delegatedUnderParent });
   const environments = useEnvironmentIdentities();
-  const lastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
-  const hiddenEnvironmentDots = resolveHiddenEnvironmentDots(
-    allThreads,
-    effectiveEnvironmentId,
-    lastVisitedAtById,
-  );
-  const { setEnvironmentId } = environmentScope;
   const {
     projects,
     serverConfigs,
@@ -1000,7 +966,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectGroupByScopeKey,
     projectScopeItems: lookupProjectScopeItems,
   } = useSidebarLookups(effectiveEnvironmentId);
-  const delegatedUnderParent = useDelegatedUnderParent();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -1242,12 +1207,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     clearSelection();
     setPersistedProjectScopeKeys([]);
   }, [clearSelection, revealWidensScope, setPersistedProjectScopeKeys]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- persists the environment revealed by history, links or palette navigation and clears hidden selection
-  useEffect(() => {
-    if (revealEnvironmentId === null) return;
-    clearSelection();
-    setEnvironmentId(revealEnvironmentId);
-  }, [clearSelection, revealEnvironmentId, setEnvironmentId]);
   const revealActiveRow = useActiveRowReveal(routeReveal, routeRowThreadKey);
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
   const scratchMachineLabelFor = (
@@ -3610,18 +3569,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           key="draft-sessions"
                           projectByKey={projectByKey}
                           projectDisplayNameByKey={projectDisplayNameByKey}
-                          scopedProjectKeys={
-                            scopedProjectKeys ??
-                            (effectiveEnvironmentId === null
-                              ? null
-                              : new Set(
-                                  projectGroups.flatMap((group) =>
-                                    group.memberProjectRefs.map(
-                                      (ref) => `${ref.environmentId}:${ref.projectId}`,
-                                    ),
-                                  ),
-                                ))
-                          }
+                          scopedProjectKeys={resolveEnvironmentDraftProjectKeys(
+                            scopedProjectKeys,
+                            effectiveEnvironmentId,
+                            projectGroups,
+                          )}
                           routeDraftId={routeDraftIdForRows}
                           onNavigateToDraft={navigateToDraft}
                           onDraftContextMenu={handleDraftContextMenu}

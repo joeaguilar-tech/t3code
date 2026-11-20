@@ -51,7 +51,7 @@ export function SidebarEnvironmentFilter({
       <MenuTrigger
         render={
           <SidebarHeaderIconButton
-            label={`Filter threads by environment${selected ? `: ${selected.label}` : ""}`}
+            label={`Filter threads by environment${selected ? `: ${selected.label}` : ""}${dot === "attention" ? ", another environment needs you" : dot === "unread" ? ", another environment has finished threads" : ""}`}
           />
         }
       >

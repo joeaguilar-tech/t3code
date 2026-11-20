@@ -1,5 +1,5 @@
 // Fork-only: sidebar environment filter.
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "./Sidebar.logic";
@@ -58,4 +58,21 @@ export function environmentForShortcutIndex(
   index: number,
 ): EnvironmentId | null {
   return environments[index - 1]?.environmentId ?? null;
+}
+
+export function resolveEnvironmentDraftProjectKeys(
+  scopedProjectKeys: ReadonlySet<string> | null,
+  environmentId: EnvironmentId | null,
+  projectGroups: readonly { memberProjectRefs: readonly ScopedProjectRef[] }[],
+): ReadonlySet<string> | null {
+  return (
+    scopedProjectKeys ??
+    (environmentId === null
+      ? null
+      : new Set(
+          projectGroups.flatMap((group) =>
+            group.memberProjectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`),
+          ),
+        ))
+  );
 }
