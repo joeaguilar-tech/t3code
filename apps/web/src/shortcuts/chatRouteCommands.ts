@@ -97,10 +97,13 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
     event.stopPropagation();
   };
 
-  const startNewLocal: CommandHandler = (event) => {
+  const startNewLocal = (
+    event: KeyboardEvent,
+    options?: { environmentId: EnvironmentId | null },
+  ) => {
     claim(event);
     // With no current or open project, such as when every project is archived, pick one.
-    void startNewThreadFromContext(readThreadContext()).then((started) => {
+    void startNewThreadFromContext(readThreadContext(), options).then((started) => {
       if (!started) openCommandPalette({ open: "new-thread-in" });
     });
   };
@@ -140,7 +143,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
           openCommandPalette({ open: "new-thread-in" });
           return;
         }
-        startNewLocal(event);
+        startNewLocal(event, { environmentId: readSidebarEnvironmentId() });
       },
       "preview.toggle": (event) => {
         claim(event);

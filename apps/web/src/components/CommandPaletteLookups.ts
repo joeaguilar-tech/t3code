@@ -63,31 +63,39 @@ export function useSortedProjectGroups(
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const clientSettings = useClientSettings(selectCommandPaletteClientSettings);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const projectGroupingSettings = {
-    sidebarProjectGroupingMode: clientSettings.sidebarProjectGroupingMode,
-    sidebarProjectGroupingOverrides: clientSettings.sidebarProjectGroupingOverrides,
+  const sortProjectGroups = (scopedProjects: typeof projects) => {
+    const projectGroupingSettings = {
+      sidebarProjectGroupingMode: clientSettings.sidebarProjectGroupingMode,
+      sidebarProjectGroupingOverrides: clientSettings.sidebarProjectGroupingOverrides,
+    };
+    const orderedProjects = orderItemsByPreferredIds({
+      items: scopedProjects,
+      preferredIds: projectOrder,
+      getId: getProjectOrderKey,
+      getPreferenceIds: (project) => [
+        getProjectOrderKey(project),
+        legacyProjectCwdPreferenceKey(project.workspaceRoot),
+      ],
+    });
+    const unsortedProjectGroups = buildSidebarProjectSnapshots({
+      projects:
+        clientSettings.sidebarProjectSortOrder === "manual" ? orderedProjects : scopedProjects,
+      settings: projectGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+    });
+    return sortLogicalProjectsForSidebar(
+      unsortedProjectGroups,
+      threads,
+      clientSettings.sidebarProjectSortOrder,
+    );
   };
-  const orderedProjects = orderItemsByPreferredIds({
-    items: filterToEnvironment(projects, environmentId),
-    preferredIds: projectOrder,
-    getId: getProjectOrderKey,
-    getPreferenceIds: (project) => [
-      getProjectOrderKey(project),
-      legacyProjectCwdPreferenceKey(project.workspaceRoot),
-    ],
-  });
-  const unsortedProjectGroups = buildSidebarProjectSnapshots({
-    projects:
-      clientSettings.sidebarProjectSortOrder === "manual"
-        ? orderedProjects
-        : filterToEnvironment(projects, environmentId),
-    settings: projectGroupingSettings,
-    primaryEnvironmentId,
-    resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
-  });
-  return sortLogicalProjectsForSidebar(
-    unsortedProjectGroups,
-    threads,
-    clientSettings.sidebarProjectSortOrder,
-  );
+  const projectGroups = sortProjectGroups(projects);
+  return {
+    projectGroups,
+    newThreadProjectGroups:
+      environmentId === null
+        ? projectGroups
+        : sortProjectGroups(filterToEnvironment(projects, environmentId)),
+  };
 }

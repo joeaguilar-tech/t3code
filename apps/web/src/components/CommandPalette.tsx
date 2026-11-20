@@ -533,8 +533,7 @@ function OpenCommandPaletteDialog(props: {
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const { environmentLabelById, projectEnvironmentLocationById } = useEnvironmentLookups();
-  const projectGroups = useSortedProjectGroups(environmentLabelById);
-  const newThreadProjectGroups = useSortedProjectGroups(
+  const { projectGroups, newThreadProjectGroups } = useSortedProjectGroups(
     environmentLabelById,
     effectiveEnvironmentId,
   );
@@ -558,27 +557,38 @@ function OpenCommandPaletteDialog(props: {
       group,
     ]),
   );
-  const newThreadPickerEntries = buildSidebarProjectPickerEntries({
-    groups: pickableProjectGroups(newThreadProjectGroups),
-    preferredProjectRef: contextualProjectRef,
-  });
-  const newThreadPickerProjects = newThreadPickerEntries.map(({ group, targetProject }) => ({
-    ...targetProject,
-    displayName: group.displayName,
-  }));
-  const newThreadGroupByTargetKey = new Map(
-    newThreadPickerEntries.map(({ group, targetProject }) => [
-      `${targetProject.environmentId}:${targetProject.id}`,
-      group,
-    ]),
-  );
+  const newThreadPickerEntries =
+    effectiveEnvironmentId === null
+      ? projectPickerEntries
+      : buildSidebarProjectPickerEntries({
+          groups: pickableProjectGroups(newThreadProjectGroups),
+          preferredProjectRef: contextualProjectRef,
+        });
+  const newThreadPickerProjects =
+    effectiveEnvironmentId === null
+      ? pickerProjects
+      : newThreadPickerEntries.map(({ group, targetProject }) => ({
+          ...targetProject,
+          displayName: group.displayName,
+        }));
+  const newThreadGroupByTargetKey =
+    effectiveEnvironmentId === null
+      ? projectGroupByTargetKey
+      : new Map(
+          newThreadPickerEntries.map(({ group, targetProject }) => [
+            `${targetProject.environmentId}:${targetProject.id}`,
+            group,
+          ]),
+        );
   const { canPinProjectGroup, toggleProjectGroupPin } = useProjectPin();
   // A row's target record can change when another machine's copy loads, so the kept
   // order follows the project group instead.
-  const rowOrderKey = (prefix: string) => (item: CommandPaletteActionItem) =>
-    projectGroupByTargetKey.get(item.value.slice(prefix.length + 1))?.projectKey ?? item.value;
-  const projectPin = (project: CommandPaletteProject) => {
-    const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
+  const rowOrderKey =
+    (prefix: string, groups = projectGroupByTargetKey) =>
+    (item: CommandPaletteActionItem) =>
+      groups.get(item.value.slice(prefix.length + 1))?.projectKey ?? item.value;
+  const projectPin = (project: CommandPaletteProject, groups = projectGroupByTargetKey) => {
+    const group = groups.get(`${project.environmentId}:${project.id}`);
     return group && canPinProjectGroup(group)
       ? {
           name: group.displayName,
@@ -861,7 +871,7 @@ function OpenCommandPaletteDialog(props: {
           : null,
         projectGroupByTargetKey: newThreadGroupByTargetKey,
         locationByEnvironmentId: projectEnvironmentLocationById,
-        pin: projectPin,
+        pin: (project) => projectPin(project, newThreadGroupByTargetKey),
         runProject: async (project) => {
           const group = newThreadGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
           const contextualRefBelongsToGroup =
@@ -904,7 +914,7 @@ function OpenCommandPaletteDialog(props: {
         ...projectItems.slice(noProjectIndex),
       ];
     })(),
-    rowOrderKey("new-thread-in"),
+    rowOrderKey("new-thread-in", newThreadGroupByTargetKey),
     true,
   );
   // Jump shortcuts follow the rows as shown, so a pin cannot move a number to another row.

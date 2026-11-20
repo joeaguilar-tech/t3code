@@ -1,4 +1,8 @@
-import { scopedProjectKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  scopedProjectKey,
+  scopeThreadRef,
+  scopeProjectRef,
+} from "@t3tools/client-runtime/environment";
 import {
   DEFAULT_SERVER_SETTINGS,
   type EnvironmentId,
@@ -14,11 +18,13 @@ import {
   type DraftThreadState,
   useComposerDraftStore,
 } from "../composerDraftStore";
+import { orderItemsByPreferredIds } from "../components/Sidebar.logic";
 import { newDraftId, newThreadId } from "../lib/utils";
-import { resolveSidebarDefaultProjectRef } from "../components/Sidebar.environment";
+import { filterToEnvironment } from "../components/Sidebar.environment";
 import { useSidebarEnvironmentScope } from "./useSidebarEnvironmentScope";
 import {
   deriveLogicalProjectKeyFromSettings,
+  getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
 import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -41,7 +47,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentSummaries } from "../state/presentation";
 import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
-import { useUiStateStore } from "../uiStateStore";
+import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { getClientSettings } from "./useSettings";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
@@ -429,7 +435,18 @@ export function resolveDefaultProjectRef(
   projectOrder: readonly string[],
   environmentId: EnvironmentId | null = null,
 ): ScopedProjectRef | null {
-  return resolveSidebarDefaultProjectRef(projects, projectOrder, environmentId);
+  const [defaultProject] = orderItemsByPreferredIds({
+    items: filterToEnvironment(projects, environmentId).filter(
+      (project) => project.archivedAt == null,
+    ),
+    preferredIds: projectOrder,
+    getId: getProjectOrderKey,
+    getPreferenceIds: (project) => [
+      getProjectOrderKey(project),
+      legacyProjectCwdPreferenceKey(project.workspaceRoot),
+    ],
+  });
+  return defaultProject ? scopeProjectRef(defaultProject.environmentId, defaultProject.id) : null;
 }
 
 export function useHandleNewThread() {

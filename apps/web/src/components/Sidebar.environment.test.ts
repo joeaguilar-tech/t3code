@@ -1,3 +1,4 @@
+import { resolveDefaultProjectRef } from "../hooks/useHandleNewThread";
 import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { describe, expect, it } from "vite-plus/test";
@@ -6,7 +7,6 @@ import {
   environmentForShortcutIndex,
   filterToEnvironment,
   resolveSidebarNewThreadProjectRef,
-  resolveSidebarDefaultProjectRef,
   resolveEffectiveSidebarEnvironmentId,
   resolveHiddenEnvironmentDots,
 } from "./Sidebar.environment";
@@ -98,6 +98,11 @@ describe("new thread environment choice", () => {
     environmentId,
     id: ProjectId.make(id),
     workspaceRoot: `/work/${id}`,
+    title: id,
+    defaultModelSelection: null,
+    scripts: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     archivedAt,
   });
   const projects = [
@@ -133,7 +138,7 @@ describe("new thread environment choice", () => {
     expect(
       resolveSidebarNewThreadProjectRef(
         current,
-        resolveSidebarDefaultProjectRef(projects, order, environmentId),
+        resolveDefaultProjectRef(projects, order, environmentId),
         environmentId,
       )?.projectId ?? null,
     ).toBe(want);

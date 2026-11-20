@@ -1,14 +1,7 @@
 // Fork-only: sidebar environment filter.
-import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import {
-  scopedThreadKey,
-  scopeThreadRef,
-  scopeProjectRef,
-} from "@t3tools/client-runtime/environment";
-import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
-import { legacyProjectCwdPreferenceKey } from "../uiStateStore";
-import { orderItemsByPreferredIds } from "./Sidebar.logic";
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "./Sidebar.logic";
 
 export function resolveEffectiveSidebarEnvironmentId(
@@ -65,30 +58,6 @@ export function environmentForShortcutIndex(
   index: number,
 ): EnvironmentId | null {
   return environments[index - 1]?.environmentId ?? null;
-}
-
-export function resolveSidebarDefaultProjectRef(
-  projects: readonly {
-    environmentId: EnvironmentId;
-    id: ProjectId;
-    workspaceRoot: string;
-    archivedAt?: string | null | undefined;
-  }[],
-  projectOrder: readonly string[],
-  environmentId: EnvironmentId | null,
-): ScopedProjectRef | null {
-  const [project] = orderItemsByPreferredIds({
-    items: filterToEnvironment(projects, environmentId).filter(
-      (project) => project.archivedAt == null,
-    ),
-    preferredIds: projectOrder,
-    getId: getProjectOrderKey,
-    getPreferenceIds: (project) => [
-      getProjectOrderKey(project),
-      legacyProjectCwdPreferenceKey(project.workspaceRoot),
-    ],
-  });
-  return project ? scopeProjectRef(project.environmentId, project.id) : null;
 }
 
 export function resolveSidebarNewThreadProjectRef(
