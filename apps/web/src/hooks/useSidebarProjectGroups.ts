@@ -1,3 +1,5 @@
+import type { EnvironmentId } from "@t3tools/contracts";
+import { filterToEnvironment } from "../components/Sidebar.environment";
 import { orderItemsByPreferredIds, sortSidebarV2ProjectGroups } from "../components/Sidebar.logic";
 import {
   getProjectOrderKey,
@@ -9,11 +11,11 @@ import { useDelegatedUnderParent, useProjects, useQuietThreadShells } from "../s
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
 
-export function useSidebarProjectGroups() {
-  const projects = useProjects();
+export function useSidebarProjectGroups(environmentId: EnvironmentId | null = null) {
+  const projects = filterToEnvironment(useProjects(), environmentId);
   // Activity order lags a running thread's streaming ticks until its next
   // real change; reading every tick re-rendered the whole sidebar with it.
-  const threads = useQuietThreadShells();
+  const threads = filterToEnvironment(useQuietThreadShells(), environmentId);
   const delegatedUnderParent = useDelegatedUnderParent();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const sortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);

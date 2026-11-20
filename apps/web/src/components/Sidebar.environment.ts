@@ -107,3 +107,20 @@ export function resolveSidebarNewThreadProjectRef(
     ? current
     : fallback;
 }
+
+export function resolveEnvironmentDraftProjectKeys(
+  scopedProjectKeys: ReadonlySet<string> | null,
+  environmentId: EnvironmentId | null,
+  projectGroups: readonly { memberProjectRefs: readonly ScopedProjectRef[] }[],
+): ReadonlySet<string> | null {
+  return (
+    scopedProjectKeys ??
+    (environmentId === null
+      ? null
+      : new Set(
+          projectGroups.flatMap((group) =>
+            group.memberProjectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`),
+          ),
+        ))
+  );
+}
