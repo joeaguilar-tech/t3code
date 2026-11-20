@@ -345,3 +345,9 @@ desktop and browser notifications, sounds, in-app toasts, and mobile push. Use i
 threads you check on your own schedule, such as a scheduled review bot. The thread still
 shows its status in the sidebar. Choose **Unmute notifications** to turn alerts back on.
 You can also ask an agent to mute its own thread.
+
+## Filter by environment
+
+Use the environment filter beside the project filter to show threads from one environment, or choose **All environments**. Your choice is saved on this device. Opening a thread from another environment switches the filter to that environment.
+
+A warning dot means a hidden environment needs your attention; a green dot means it has an unread completed thread. Working threads alone do not show a dot.

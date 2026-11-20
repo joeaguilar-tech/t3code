@@ -1,3 +1,7 @@
+import { pendingSidebarRouteReveal } from "./sidebar/routeReveal";
+import { useSidebarEnvironmentScope } from "../hooks/useSidebarEnvironmentScope";
+import { filterToEnvironment, resolveHiddenEnvironmentDots } from "./Sidebar.environment";
+import { SidebarEnvironmentFilter } from "./SidebarEnvironmentFilter";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -848,12 +852,14 @@ function isOptimisticDropReleased(input: {
 }
 
 // Build maps in a hook so the compiler can prove they are frozen and cache them.
-function useSidebarLookups() {
+function useSidebarLookups(environmentId: EnvironmentId | null) {
   const projects = useProjects();
   const environments = useEnvironmentIdentities();
-  const serverConfigs = useServerConfigs();
+  const serverConfigs = new Map(
+    [...useServerConfigs()].filter(([id]) => environmentId === null || id === environmentId),
+  );
   const providerEntriesByEnvironment = useAtomValue(sidebarProviderEntriesAtom);
-  const projectGroups = useSidebarProjectGroups();
+  const projectGroups = useSidebarProjectGroups(environmentId);
   const environmentLabelById = new Map(
     environments.map((environment) => [environment.environmentId, environment.label] as const),
   );
@@ -944,6 +950,45 @@ function readRouteThreadKey(router: AnyRouter): string | null {
 }
 
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
+  const environmentScope = useSidebarEnvironmentScope();
+  const allThreads = useQuietThreadShells();
+  const routeTarget = useThreadRouteTarget();
+  const environmentRouteKey =
+    routeTarget?.kind === "server"
+      ? scopedThreadKey(
+          scopeThreadRef(
+            routeTarget.threadRef.environmentId,
+            resolveSidebarRowThreadId(
+              routeTarget.threadRef.threadId,
+              routeTarget.threadRef.environmentId,
+              allThreads,
+            ),
+          ),
+        )
+      : null;
+  const environmentRevealPending =
+    pendingSidebarRouteReveal(routeReveal, environmentRouteKey) !== null;
+  const revealEnvironmentId =
+    environmentRevealPending &&
+    routeTarget?.kind === "server" &&
+    allThreads.some(
+      (thread) =>
+        thread.environmentId === routeTarget.threadRef.environmentId &&
+        thread.id === routeTarget.threadRef.threadId,
+    ) &&
+    environmentScope.effectiveEnvironmentId !== null &&
+    environmentScope.effectiveEnvironmentId !== routeTarget.threadRef.environmentId
+      ? routeTarget.threadRef.environmentId
+      : null;
+  const effectiveEnvironmentId = revealEnvironmentId ?? environmentScope.effectiveEnvironmentId;
+  const environments = useEnvironmentIdentities();
+  const lastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
+  const hiddenEnvironmentDots = resolveHiddenEnvironmentDots(
+    allThreads,
+    effectiveEnvironmentId,
+    lastVisitedAtById,
+  );
+  const { setEnvironmentId } = environmentScope;
   const {
     projects,
     serverConfigs,
@@ -954,7 +999,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectDisplayNameByKey,
     projectGroupByScopeKey,
     projectScopeItems: lookupProjectScopeItems,
-  } = useSidebarLookups();
+  } = useSidebarLookups(effectiveEnvironmentId);
   const delegatedUnderParent = useDelegatedUnderParent();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -1049,7 +1094,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
   const acknowledgeWoke = useAcknowledgeThreadWoke();
-  const routeTarget = useThreadRouteTarget();
   const routeDraftThread = useComposerDraftStore((store) =>
     routeTarget?.kind === "draft" ? store.getDraftSession(routeTarget.draftId) : null,
   );
@@ -1072,7 +1116,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
-  const connectedEnvironmentIds = useConnectedEnvironmentIds();
+  const connectedEnvironmentIds = useConnectedEnvironmentIds().filter(
+    (id) => effectiveEnvironmentId === null || id === effectiveEnvironmentId,
+  );
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
   const clearPendingFileDrop = useSidebarPendingFileDropStore((s) => s.clearPendingFileDrop);
   const [renamingThreadRef, setRenamingThreadRef] = useState<ScopedThreadRef | null>(null);
@@ -1150,7 +1196,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const threads = filterToEnvironment(allThreads, effectiveEnvironmentId);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1196,6 +1242,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     clearSelection();
     setPersistedProjectScopeKeys([]);
   }, [clearSelection, revealWidensScope, setPersistedProjectScopeKeys]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- persists the environment revealed by history, links or palette navigation and clears hidden selection
+  useEffect(() => {
+    if (revealEnvironmentId === null) return;
+    clearSelection();
+    setEnvironmentId(revealEnvironmentId);
+  }, [clearSelection, revealEnvironmentId, setEnvironmentId]);
   const revealActiveRow = useActiveRowReveal(routeReveal, routeRowThreadKey);
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
   const scratchMachineLabelFor = (
@@ -1242,6 +1294,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
     let count = 0;
     for (const [draftKey, session] of Object.entries(store.draftThreadsByThreadKey)) {
+      if (effectiveEnvironmentId !== null && session.environmentId !== effectiveEnvironmentId)
+        continue;
       if (session.promotedTo != null) {
         continue;
       }
@@ -3076,6 +3130,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
+              environmentScope={
+                <SidebarEnvironmentFilter
+                  environments={environments}
+                  environmentId={effectiveEnvironmentId}
+                  machines={environmentMachineById}
+                  dots={hiddenEnvironmentDots}
+                  onSelect={(id) => {
+                    clearSelection();
+                    setEnvironmentId(id);
+                    scrollSidebarToTop(sidebarContentRef.current);
+                  }}
+                />
+              }
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -3543,7 +3610,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           key="draft-sessions"
                           projectByKey={projectByKey}
                           projectDisplayNameByKey={projectDisplayNameByKey}
-                          scopedProjectKeys={scopedProjectKeys}
+                          scopedProjectKeys={
+                            scopedProjectKeys ??
+                            (effectiveEnvironmentId === null
+                              ? null
+                              : new Set(
+                                  projectGroups.flatMap((group) =>
+                                    group.memberProjectRefs.map(
+                                      (ref) => `${ref.environmentId}:${ref.projectId}`,
+                                    ),
+                                  ),
+                                ))
+                          }
                           routeDraftId={routeDraftIdForRows}
                           onNavigateToDraft={navigateToDraft}
                           onDraftContextMenu={handleDraftContextMenu}
