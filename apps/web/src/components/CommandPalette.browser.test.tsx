@@ -25,6 +25,11 @@ vi.mock("../hooks/useSidebarEnvironmentScope", () => ({
   readSidebarEnvironmentId: () => entities.selectedEnvironmentId,
 }));
 
+vi.mock("../hooks/useProjectGroupUpdate", async (original) => ({
+  ...(await original<typeof import("../hooks/useProjectGroupUpdate")>()),
+  useProjectPin: () => ({ canPinProjectGroup: () => true, toggleProjectGroupPin: () => undefined }),
+}));
+
 function setup(state: { projects?: ReadonlyArray<Project>; threads?: ReadonlyArray<Thread> } = {}) {
   useCommandPaletteStore.setState(useCommandPaletteStore.getInitialState(), true);
   entities.selectedEnvironmentId = null;
@@ -81,22 +86,36 @@ describe("CommandPalette open intents", () => {
       environmentId: EnvironmentId.make(environmentId),
       title,
       workspaceRoot: `/work/${title}`,
-      repositoryIdentity: null,
+      repositoryIdentity: {
+        canonicalKey: "github.com/example/shared",
+        locator: {
+          source: "git-remote",
+          remoteName: "origin",
+          remoteUrl: "https://github.com/example/shared.git",
+        },
+      },
       defaultModelSelection: null,
       createdAt: "2026-03-01T00:00:00.000Z",
       updatedAt: "2026-03-01T00:00:00.000Z",
       scripts: [],
     });
-    setup({ projects: [project("work", "WorkProject"), project("personal", "PersonalProject")] });
+    setup({
+      projects: [
+        project("personal", "PersonalProject"),
+        project("work", "WorkProject"),
+        { ...project("personal", "PersonalOnly"), repositoryIdentity: null },
+      ],
+    });
     entities.selectedEnvironmentId = EnvironmentId.make("work");
     await using _screen = await render(<CommandPalette>{null}</CommandPalette>);
     openCommandPalette({ open: "new-thread-in" });
     await expect.element(page.getByRole("option", { name: /WorkProject/ })).toBeVisible();
+    await expect.element(page.getByTitle(/^Pin WorkProject/)).toBeVisible();
     await expect
       .element(page.getByRole("option", { name: /PersonalProject/ }))
       .not.toBeInTheDocument();
-    openCommandPalette({ query: "PersonalProject" });
-    await expect.element(page.getByRole("option", { name: /PersonalProject/ })).toBeVisible();
+    openCommandPalette({ query: "PersonalOnly" });
+    await expect.element(page.getByRole("option", { name: /PersonalOnly/ })).toBeVisible();
   });
 
   it("opens a search intent with its query in the focused input", async () => {
