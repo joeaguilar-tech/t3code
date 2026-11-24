@@ -200,7 +200,9 @@ export class VoiceInputSession {
     if (elapsedSeconds !== this.snapshot.elapsedSeconds) {
       this.publish({ ...this.snapshot, elapsedSeconds });
     }
-    this.target?.onMeteringSample?.(level);
+    try {
+      this.target?.onMeteringSample?.(level);
+    } catch {}
   }
 
   private setAudioLevels(levels: ReadonlyArray<number>): void {

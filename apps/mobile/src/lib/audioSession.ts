@@ -1,7 +1,7 @@
 import { AudioModule, setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
 
 type AudioSessionToken = {
-  readonly kind: "playback" | "recording" | "voice-mode";
+  readonly kind: "playback" | "recording" | "voice-mode" | "voice-mode-speech";
   readonly onCancel?: () => void;
   readonly onRelease?: () => void;
   released: boolean;
@@ -69,8 +69,11 @@ export function activateAudioSession(
     // Video configures and activates its own native session, including moviePlayback on iOS.
     if (nativePlayback) return true;
     await setAudioModeAsync({
-      allowsRecording: token.kind !== "playback",
-      interruptionMode: token.kind === "voice-mode" ? "duckOthers" : "doNotMix",
+      allowsRecording: token.kind === "recording" || token.kind === "voice-mode",
+      interruptionMode:
+        token.kind === "voice-mode" || token.kind === "voice-mode-speech"
+          ? "duckOthers"
+          : "doNotMix",
       playsInSilentMode: true,
       shouldPlayInBackground: false,
     });
@@ -85,9 +88,7 @@ export function releaseAudioSession(token: AudioSessionToken): Promise<void> {
   return enqueue(async () => {
     if (owner !== token) return;
     try {
-      if (token.kind === "voice-mode") {
-        await setAudioModeAsync({ allowsRecording: false, interruptionMode: "mixWithOthers" });
-      } else if (token.kind === "recording") {
+      if (token.kind !== "playback") {
         await setAudioModeAsync({ allowsRecording: false });
       }
     } finally {
