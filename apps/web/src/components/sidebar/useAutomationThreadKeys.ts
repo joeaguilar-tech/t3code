@@ -1,21 +1,18 @@
 import { useAtomValue } from "@effect/atom-react";
+import {
+  automationThreadKeys,
+  createAutomationTasksAtom,
+  createAutomationThreadKeysAtom,
+} from "@t3tools/client-runtime/state/automation-threads";
 import { environmentSummaries } from "../../state/presentation";
 import { serverEnvironment } from "../../state/server";
-import { automationThreadKeys } from "../Sidebar.automations";
-import {
-  createSidebarAutomationTasksAtom,
-  createSidebarAutomationThreadKeysAtom,
-} from "./automationTasksAtom";
 
-const tasksByEnvironmentAtom = createSidebarAutomationTasksAtom({
+const tasksByEnvironmentAtom = createAutomationTasksAtom({
   environmentsAtom: environmentSummaries.identitiesAtom,
   tasksAtom: (environmentId) => serverEnvironment.scheduledTasksLive({ environmentId, input: {} }),
 });
 
-const threadKeysAtom = createSidebarAutomationThreadKeysAtom(
-  tasksByEnvironmentAtom,
-  automationThreadKeys,
-);
+const threadKeysAtom = createAutomationThreadKeysAtom(tasksByEnvironmentAtom, automationThreadKeys);
 
 export function useAutomationThreadKeys() {
   return useAtomValue(threadKeysAtom);

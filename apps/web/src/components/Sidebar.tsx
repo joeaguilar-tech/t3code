@@ -217,7 +217,7 @@ import {
   type SidebarListItem,
   type SidebarSection,
 } from "./Sidebar.logic";
-import { automationThreadNeedsYou } from "./Sidebar.automations";
+import { automationThreadNeedsYou } from "@t3tools/client-runtime/state/automation-threads";
 import { useAutomationThreadKeys } from "./sidebar/useAutomationThreadKeys";
 import { AutomationShelfHeader } from "./sidebar/AutomationShelfHeader";
 import {
@@ -372,7 +372,7 @@ interface SidebarThreadPartitionInput {
   // on the clock, so the minute tick, the precise snooze-wake tick and the inbox
   // tracker's expiry version are inputs: a new key repartitions.
   readonly clockKey: string;
-  /** Fork: keys of threads a scheduled task sends into (see Sidebar.automations.ts). */
+  /** Fork: keys of threads a scheduled task sends into (see client-runtime state/automationThreads.ts). */
   readonly automationThreadKeys: ReadonlySet<string>;
   readonly localThreadLastVisitedAtById: Readonly<Record<string, string | undefined>>;
 }
