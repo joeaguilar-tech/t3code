@@ -54,3 +54,8 @@ export {
   type VoiceModeState,
   type VoiceModeTimer,
 } from "./voiceMode.ts";
+/** @public */
+export {
+  VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE,
+  VOICE_MODE_SEND_FAILED_PHRASE,
+} from "./voiceMode.ts";

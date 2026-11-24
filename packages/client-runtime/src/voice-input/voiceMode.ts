@@ -3,6 +3,11 @@ export const VOICE_MODE_WORKING_DELAY_MS = 4_000;
 export const VOICE_MODE_WORKING_PHRASE = "Working on it";
 export const VOICE_MODE_NEEDS_USER_PHRASE = "The agent needs you. Check the screen.";
 export const VOICE_MODE_FAILED_PHRASE = "That run failed. Check the screen.";
+/** @public */
+export const VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE =
+  "An earlier request failed. Check the screen.";
+/** @public */
+export const VOICE_MODE_SEND_FAILED_PHRASE = "That message didn't send. Check the screen.";
 
 export type VoiceModePhase =
   | "idle"
@@ -21,7 +26,8 @@ export type VoiceModeState = {
 };
 
 export type VoiceModeRunEvent =
-  | { readonly type: "running" | "needs-user" | "failed" }
+  | { readonly type: "running" | "needs-user" }
+  | { readonly type: "failed"; readonly handledMessageIds: readonly string[] }
   | {
       readonly type: "finished";
       readonly finalMessage: string;
@@ -52,7 +58,12 @@ export type VoiceModeDependencies = {
   readonly autoMute?: boolean;
 };
 
-type FinishedRun = Extract<VoiceModeRunEvent, { type: "finished" }>;
+type RunResult = Extract<VoiceModeRunEvent, { type: "finished" | "failed" }>;
+
+type MicrophoneWindow = {
+  heardSpeech: boolean;
+  finishing?: { promise: Promise<void>; resolve: () => void };
+};
 
 export class VoiceModeController {
   private readonly autoMute: boolean;
@@ -67,11 +78,11 @@ export class VoiceModeController {
   private run: "idle" | "running" | "paused" = "idle";
   private wantsMicrophone = true;
   private manuallyMuted = false;
-  private microphoneWindow: object | undefined;
+  private microphoneWindow: MicrophoneWindow | undefined;
   private playback: object | undefined;
   private sending: object | undefined;
   private latestMessageId: string | undefined;
-  private finishedDuringSend: FinishedRun[] = [];
+  private resultsDuringSend: RunResult[] = [];
   private workingAnnounced = false;
   private cancelWorkingTimer: (() => void) | undefined;
   private cancelListenTimer: (() => void) | undefined;
@@ -100,7 +111,7 @@ export class VoiceModeController {
     if (this.lifecycle === "ended") return;
     this.lifecycle = "ended";
     this.sending = undefined;
-    this.finishedDuringSend = [];
+    this.resultsDuringSend = [];
     this.clearListenTimer();
     this.clearWorkingTimer();
     this.stopPlayback();
@@ -110,7 +121,8 @@ export class VoiceModeController {
   toggleMute(): void {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();
-    this.manuallyMuted = !this.manuallyMuted && this.wantsMicrophone;
+    this.manuallyMuted =
+      !this.manuallyMuted && (this.state.microphoneOpen || this.canOpenMicrophone());
     if (!this.manuallyMuted) this.wantsMicrophone = true;
     this.refresh();
   }
@@ -130,8 +142,22 @@ export class VoiceModeController {
     this.refresh();
   }
 
+  noteSpeechActivity(): void {
+    const window = this.microphoneWindow;
+    if (!window) return;
+    window.heardSpeech = true;
+    this.clearListenTimer();
+  }
+
   tapToSend(): void {
-    if (!this.microphoneWindow) return;
+    const window = this.microphoneWindow;
+    if (!window || window.finishing) return;
+    let resolve!: () => void;
+    const promise = new Promise<void>((finish) => {
+      resolve = finish;
+    });
+    window.finishing = { promise, resolve };
+    this.clearListenTimer();
     this.dependencies.microphone.finish();
   }
 
@@ -150,42 +176,47 @@ export class VoiceModeController {
         await this.speak(VOICE_MODE_NEEDS_USER_PHRASE);
         break;
       case "failed":
-        this.run = "idle";
-        this.latestMessageId = undefined;
-        this.finishedDuringSend = [];
-        this.clearWorkingTimer();
-        await this.speak(VOICE_MODE_FAILED_PHRASE, true);
-        break;
       case "finished":
         this.run = "idle";
         this.clearWorkingTimer();
-        if (this.sending) this.finishedDuringSend.push(event);
-        if (!this.sending && (await this.speakReply(event))) return;
+        if (this.sending) {
+          this.resultsDuringSend.push(event);
+        } else {
+          await this.announceRunResult(event);
+        }
         this.refresh();
     }
   }
 
-  private async speakReply(event: FinishedRun): Promise<boolean> {
-    if (
-      this.latestMessageId === undefined ||
-      !event.handledMessageIds.includes(this.latestMessageId)
-    ) {
-      return false;
+  private async announceRunResult(event: RunResult): Promise<void> {
+    if (this.lifecycle !== "active") return;
+    const messageId = this.latestMessageId;
+    const matches = messageId !== undefined && event.handledMessageIds.includes(messageId);
+    if (event.type === "finished" && !matches) return;
+    if (event.type === "failed" && messageId !== undefined && !matches) {
+      await this.speak(VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE);
+      return;
     }
     this.latestMessageId = undefined;
-    await this.speak(this.dependencies.toSpeech(event.finalMessage), true);
-    return true;
+    const text =
+      event.type === "failed"
+        ? VOICE_MODE_FAILED_PHRASE
+        : this.dependencies.toSpeech(event.finalMessage);
+    await this.speak(text, true);
   }
 
   private closeMicrophone(): void {
-    if (!this.microphoneWindow) return;
+    const window = this.microphoneWindow;
+    if (!window) return;
     this.microphoneWindow = undefined;
     this.dependencies.microphone.cancel();
+    window.finishing?.resolve();
   }
 
-  private async receiveTranscript(window: object, transcript: string): Promise<void> {
+  private async receiveTranscript(window: MicrophoneWindow, transcript: string): Promise<void> {
     if (window !== this.microphoneWindow) return;
     this.microphoneWindow = undefined;
+    window.finishing?.resolve();
     const text = transcript.trim();
     if (!text) {
       this.refresh();
@@ -202,10 +233,14 @@ export class VoiceModeController {
     try {
       messageId = await this.dependencies.sendSpokenMessage(text);
     } catch {
-      if (this.sending !== send) return;
+      if (this.sending !== send) {
+        await this.speak(VOICE_MODE_SEND_FAILED_PHRASE);
+        return;
+      }
       this.sending = undefined;
-      this.finishedDuringSend = [];
-      await this.speak(VOICE_MODE_FAILED_PHRASE, true);
+      const results = this.takeBufferedRunResults();
+      await this.speak(VOICE_MODE_SEND_FAILED_PHRASE, true);
+      for (const result of results) await this.announceRunResult(result);
       return;
     }
     if (this.sending !== send) return;
@@ -213,20 +248,22 @@ export class VoiceModeController {
     if (this.latestMessageId === undefined) this.workingAnnounced = false;
     this.latestMessageId = messageId;
     this.sending = undefined;
-    // A run may finish before the send port returns the message ID.
-    const finished = this.finishedDuringSend.find((event) =>
-      event.handledMessageIds.includes(messageId),
-    );
-    this.finishedDuringSend = [];
-    if (finished) {
-      await this.speakReply(finished);
-      return;
-    }
+    for (const result of this.takeBufferedRunResults()) await this.announceRunResult(result);
     this.scheduleWorkingTimer();
     this.refresh();
   }
 
+  private takeBufferedRunResults(): RunResult[] {
+    // The run can settle before the send port returns the message ID.
+    const results = this.resultsDuringSend;
+    this.resultsDuringSend = [];
+    return results;
+  }
+
   private async speak(text: string, reopen = false): Promise<void> {
+    const finishing = this.microphoneWindow?.finishing;
+    if (finishing) await finishing.promise;
+    if (this.lifecycle !== "active") return;
     this.stopPlayback();
     if (text) {
       const playback = {};
@@ -276,6 +313,7 @@ export class VoiceModeController {
     this.cancelWorkingTimer = this.dependencies.timer.schedule(VOICE_MODE_WORKING_DELAY_MS, () => {
       this.cancelWorkingTimer = undefined;
       this.workingAnnounced = true;
+      if (this.microphoneWindow?.heardSpeech || this.microphoneWindow?.finishing) return;
       return this.speak(VOICE_MODE_WORKING_PHRASE);
     });
   }
@@ -290,20 +328,24 @@ export class VoiceModeController {
     this.cancelListenTimer = undefined;
   }
 
-  private refresh(): void {
-    if (
+  private canOpenMicrophone(): boolean {
+    return (
       this.lifecycle === "active" &&
       this.run !== "paused" &&
       !this.playback &&
       !this.manuallyMuted &&
       this.wantsMicrophone
-    ) {
+    );
+  }
+
+  private refresh(): void {
+    if (this.canOpenMicrophone()) {
       if (!this.microphoneWindow) {
-        const window = {};
+        const window = { heardSpeech: false };
         this.microphoneWindow = window;
         this.dependencies.microphone.open((text) => this.receiveTranscript(window, text));
       }
-    } else {
+    } else if (this.lifecycle === "ended" || !this.microphoneWindow?.finishing) {
       this.closeMicrophone();
     }
 
