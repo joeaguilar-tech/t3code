@@ -81,12 +81,9 @@ export function createVoiceModeCover() {
           }
         : control;
     },
-    silence(
-      controller: Pick<VoiceModeController, "currentState" | "toggleMute">,
-      stopSpeaking: () => void,
-    ) {
+    silence(controller: Pick<VoiceModeController, "mute">, stopSpeaking: () => void) {
       stopSpeaking();
-      if (!controller.currentState.manuallyMuted) controller.toggleMute();
+      controller.mute();
     },
     unmute() {
       if (placement === "inline" || placement === "floating") captureMuted = false;

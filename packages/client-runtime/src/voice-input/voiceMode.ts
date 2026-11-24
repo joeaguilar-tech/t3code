@@ -134,11 +134,19 @@ export class VoiceModeController {
     this.refresh();
   }
 
+  mute(): void {
+    if (!this.manuallyMuted) this.setManualMute(true);
+  }
+
   toggleMute(): void {
+    this.setManualMute(this.state.microphoneOpen);
+  }
+
+  private setManualMute(muted: boolean): void {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();
     const window = this.microphoneWindow;
-    this.manuallyMuted = this.state.microphoneOpen;
+    this.manuallyMuted = muted;
     if (this.manuallyMuted && window?.protection && !window.finishing) {
       this.cancelTurn();
       return;
