@@ -23,6 +23,7 @@ export type VoiceModePhase =
 export type VoiceModeState = {
   readonly phase: VoiceModePhase;
   readonly microphoneOpen: boolean;
+  readonly playing: boolean;
   readonly manuallyMuted: boolean;
 };
 
@@ -84,6 +85,7 @@ export class VoiceModeController {
   private state: VoiceModeState = {
     phase: "idle",
     microphoneOpen: false,
+    playing: false,
     manuallyMuted: false,
   };
   private lifecycle: "idle" | "active" | "ended" = "idle";
@@ -118,6 +120,7 @@ export class VoiceModeController {
   start(): void {
     if (this.lifecycle !== "idle") return;
     this.lifecycle = "active";
+    this.openListenWindow();
     this.refresh();
   }
 
@@ -136,8 +139,7 @@ export class VoiceModeController {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();
     const window = this.microphoneWindow;
-    this.manuallyMuted =
-      !this.manuallyMuted && (this.state.microphoneOpen || this.canOpenMicrophone());
+    this.manuallyMuted = !this.manuallyMuted && (window !== undefined || this.canOpenMicrophone());
     if (this.manuallyMuted && window?.protection && !window.finishing) {
       this.cancelTurn();
       return;
@@ -151,8 +153,7 @@ export class VoiceModeController {
     if (!this.playback && this.speechQueue.length === 0) return;
     this.stopPlayback();
     this.manuallyMuted = false;
-    this.wantsMicrophone = true;
-    this.clearListenTimer();
+    if (this.run !== "paused") this.openListenWindow();
     this.refresh();
   }
 
@@ -203,12 +204,15 @@ export class VoiceModeController {
         this.scheduleWorkingTimer();
         this.refresh();
         break;
-      case "needs-user":
+      case "needs-user": {
         if (this.run === "paused") return;
         this.run = "paused";
         this.clearWorkingTimer();
-        await this.speak(VOICE_MODE_NEEDS_USER_PHRASE);
+        const announcement = this.speak(VOICE_MODE_NEEDS_USER_PHRASE);
+        this.refresh();
+        await announcement;
         break;
+      }
       case "failed":
       case "finished":
         this.run = "idle";
@@ -277,9 +281,9 @@ export class VoiceModeController {
       messageId = await this.dependencies.sendSpokenMessage(text);
     } catch {
       const wasPending = this.pendingSends.delete(send);
+      const replay = wasPending ? this.resumeRunTracking() : undefined;
       const announcement = this.speak(VOICE_MODE_SEND_FAILED_PHRASE, wasPending);
-      if (wasPending) await this.resumeRunTracking();
-      await announcement;
+      await Promise.all([replay, announcement]);
       return;
     }
     if (!this.pendingSends.has(send)) return;
@@ -344,21 +348,26 @@ export class VoiceModeController {
       request.resolve();
     }
 
-    if (reopen && this.pendingSends.size === 0 && this.latestMessageId === undefined) {
-      this.wantsMicrophone = true;
-      this.clearListenTimer();
-      if (this.autoMute && !this.manuallyMuted && this.run !== "paused") {
-        this.cancelListenTimer = this.dependencies.timer.schedule(
-          VOICE_MODE_LISTEN_WINDOW_MS,
-          () => {
-            this.cancelListenTimer = undefined;
-            this.wantsMicrophone = false;
-            this.refresh();
-          },
-        );
-      }
+    if (
+      reopen &&
+      this.run !== "paused" &&
+      this.pendingSends.size === 0 &&
+      this.latestMessageId === undefined
+    ) {
+      this.openListenWindow();
     }
     this.refresh();
+  }
+
+  private openListenWindow(): void {
+    this.wantsMicrophone = true;
+    this.clearListenTimer();
+    if (!this.autoMute || this.manuallyMuted) return;
+    this.cancelListenTimer = this.dependencies.timer.schedule(VOICE_MODE_LISTEN_WINDOW_MS, () => {
+      this.cancelListenTimer = undefined;
+      this.wantsMicrophone = false;
+      this.refresh();
+    });
   }
 
   private stopPlayback(): void {
@@ -409,7 +418,8 @@ export class VoiceModeController {
   }
 
   private refresh(): void {
-    if (this.canOpenMicrophone()) {
+    const canOpenMicrophone = this.canOpenMicrophone();
+    if (canOpenMicrophone) {
       if (!this.microphoneWindow) {
         const window = {
           postReply: this.cancelListenTimer !== undefined,
@@ -422,16 +432,18 @@ export class VoiceModeController {
       this.closeMicrophone();
     }
 
-    const microphoneOpen = this.microphoneWindow !== undefined && !this.manuallyMuted;
+    const microphoneOpen = this.microphoneWindow !== undefined && canOpenMicrophone;
+    const playing = this.playback !== undefined;
     const phase = this.phase(microphoneOpen);
     if (
       this.state.phase === phase &&
       this.state.microphoneOpen === microphoneOpen &&
+      this.state.playing === playing &&
       this.state.manuallyMuted === this.manuallyMuted
     ) {
       return;
     }
-    this.state = { phase, microphoneOpen, manuallyMuted: this.manuallyMuted };
+    this.state = { phase, microphoneOpen, playing, manuallyMuted: this.manuallyMuted };
     for (const listener of this.listeners) listener(this.state);
   }
 
