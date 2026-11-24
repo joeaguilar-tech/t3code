@@ -1,21 +1,33 @@
-export const EXTRA_COPY: Readonly<Record<string, readonly string[]>> = {
-  "apps/web/src/components/chat/TimelineAssistantRows.tsx": ["T3 Code"],
-  "apps/web/src/components/sidebar/UpdateEverythingDialog.tsx": ["T3 Code"],
-  "apps/web/src/lib/bootError.ts": [
-    "Could not update T3 Code.",
-    "T3 Code failed to start.",
-    "T3 Code failed to start",
-    "Run this on the computer that runs T3 Code. Your agent can check the local logs and help you file a bug report.",
+type ExtraCopy =
+  | string
+  | {
+      text: string;
+      matchCount: number;
+      occurrences: readonly number[];
+      precededBy?: string;
+    };
+
+export const EXTRA_COPY: Readonly<Record<string, readonly ExtraCopy[]>> = {
+  "apps/web/src/components/chat/TimelineAssistantRows.tsx": [
+    { text: "T3 Code", matchCount: 2, occurrences: [0, 1] },
   ],
-  "apps/mobile/src/widgets/AgentActivityWidget.tsx": [
-    "Open T3 Code to load agent activity",
-    "T3 Code",
+  "apps/web/src/components/sidebar/UpdateEverythingDialog.tsx": [
+    { text: "T3 Code", matchCount: 2, occurrences: [0, 1] },
+  ],
+  "apps/web/src/lib/bootError.ts": [
+    {
+      text: "T3 Code failed to start",
+      matchCount: 2,
+      occurrences: [0],
+      precededBy: 'element("h1", { textContent: ',
+    },
+    "Run this on the computer that runs T3 Code. Your agent can check the local logs and help you file a bug report.",
   ],
   "apps/desktop/src/app/DesktopAppActivation.ts": [
     "T3 Code could not process the desktop app request.",
   ],
   "apps/desktop/src/app/DesktopAppActivationBroker.ts": [
-    "T3 Code is shutting down.",
+    { text: "T3 Code is shutting down.", matchCount: 2, occurrences: [0, 1] },
     "The T3 Code window closed before it opened the project.",
     "The command closed before T3 Code was ready.",
   ],
@@ -27,7 +39,6 @@ export const EXTRA_COPY: Readonly<Record<string, readonly string[]>> = {
   "apps/desktop/src/app/DesktopCliShim.ts": [
     "T3 Code has moved or been removed. Open the app once to update this command.",
   ],
-  "apps/desktop/src/app/DesktopStartupRecovery.ts": ["T3 Code"],
   "apps/desktop/src/electron/WindowsForeground.ts": [
     "Windows refused to activate the T3 Code window.",
   ],
@@ -53,7 +64,11 @@ export const EXTRA_COPY: Readonly<Record<string, readonly string[]>> = {
     "The Hyprland capture helper is missing from this build. Update or reinstall T3 Code.",
   ],
   "apps/desktop/src/snapShot/KdeSnapShot.ts": [
-    "The capture helper is missing from this build. Update or reinstall T3 Code.",
+    {
+      text: "The capture helper is missing from this build. Update or reinstall T3 Code.",
+      matchCount: 2,
+      occurrences: [0, 1],
+    },
   ],
   "apps/desktop/src/snapShot/LinuxSnapShot.ts": [
     "Another T3 Code instance is capturing a window. Try again.",

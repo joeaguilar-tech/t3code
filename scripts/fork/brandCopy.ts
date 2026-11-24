@@ -109,20 +109,40 @@ function createCopyEdits(
       return [{ start: 0, end: code.length, text: JSON.stringify(catalog) }];
     }
     if (path === "apps/mobile/src/components/brandAssets.ts" && surface === "mobile") {
-      const text = `export { MOBILE_PRODUCT_NAME } from "../lib/mobileProductBrand";\nexport const T3_CODE_BRAND_MARK_SOURCE = require(${JSON.stringify(`../../../../${brand.assets.mobile.iconPng}`)});\n`;
-      return [{ start: 0, end: code.length, text }];
+      const assetPath = NodePath.posix.relative(
+        NodePath.posix.dirname(path),
+        brand.assets.mobile.iconPng,
+      );
+      return Array.from(
+        code.matchAll(
+          /(?<=require\(")(?:\.\.\/)+assets\/(?:dev\/blueprint|nightly\/nightly|prod\/black)-ios-1024\.png(?="\))/g,
+        ),
+        (match) => ({ start: match.index, end: match.index + match[0].length, text: assetPath }),
+      );
     }
+    const extras = EXTRA_COPY[path];
     if (
-      !/T3\s+Code|T3-Code/.test(code) ||
-      !/\.[cm]?[jt]sx?$/.test(path) ||
       ![appRoot, "packages/shared/src/", "packages/client-runtime/src/"].some((prefix) =>
         path.startsWith(prefix),
-      )
+      ) ||
+      !/\.[cm]?[jt]sx?$/.test(path) ||
+      (!extras && !/T3\s+Code|T3-Code/.test(code))
     )
       return [];
 
-    const extras = EXTRA_COPY[path];
     const edits: Edit[] = [];
+    const extraMatches = new Map<string, AstNode[]>();
+    for (const entry of extras ?? []) {
+      extraMatches.set(typeof entry === "string" ? entry : entry.text, []);
+    }
+    const renameNode = (node: AstNode) => {
+      const raw = code.slice(node.start, node.end);
+      for (const match of raw.matchAll(/T3(?:-|\s+)Code/g)) {
+        const start = node.start + match.index;
+        const text = rename(match[0].replace(/\s+/g, " "));
+        edits.push({ start, end: start + match[0].length, text });
+      }
+    };
     walk(parseSync(path, code).program, false, (node, translated) => {
       const value =
         node.type === "TemplateElement"
@@ -134,16 +154,39 @@ function createCopyEdits(
       const key =
         (node.type === "JSXText" ? undefined : icu.get(value)) ??
         (translated ? jsx.get(normalize(value)) : undefined);
-      if (!key && !extras?.includes(normalize(value))) return;
-
-      const raw = code.slice(node.start, node.end);
-      for (const match of raw.matchAll(/T3(?:-|\s+)Code/g)) {
-        const start = node.start + match.index;
-        const text = rename(match[0].replace(/\s+/g, " "));
-        edits.push({ start, end: start + match[0].length, text });
-        if (key) onSourceMatch?.(key);
+      const matches = extras && extraMatches.get(normalize(value));
+      if (matches) {
+        if (key || translated)
+          throw new Error(`Extra brand copy overlaps a translation in ${path}: ${value}`);
+        matches.push(node);
+      }
+      if (key) {
+        renameNode(node);
+        onSourceMatch?.(key);
       }
     });
+    for (const entry of extras ?? []) {
+      const { text, matchCount, occurrences, precededBy } =
+        typeof entry === "string"
+          ? { text: entry, matchCount: 1, occurrences: [0], precededBy: undefined }
+          : entry;
+      const matches = extraMatches.get(text)!.sort((a, b) => a.start - b.start);
+      if (matches.length !== matchCount) {
+        throw new Error(
+          `Expected ${matchCount} occurrences of "${text}" in ${path}, found ${matches.length}`,
+        );
+      }
+      for (const index of occurrences) {
+        const node = matches[index];
+        if (
+          !node ||
+          (precededBy && code.slice(node.start - precededBy.length, node.start) !== precededBy)
+        ) {
+          throw new Error(`Extra brand copy anchor changed in ${path}: "${text}"`);
+        }
+        renameNode(node);
+      }
+    }
     return edits;
   };
 }

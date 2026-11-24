@@ -9,36 +9,15 @@ export const BRAND = {
       "ICU",
       '"Give T3 Code Full Disk Access in System Settings → Privacy & Security, then retry."',
     ],
-    "64d380898f3dc4ee": [
-      "ICU",
-      '"This client requires a newer server. Update T3 Code on {host} to connect."',
-    ],
-    "64e8bf8f894e8d4b": ["ICU", '"{host} runs an older T3 Code"'],
-    "34e205f55d30b081": ["ICU", '"Tunnel works, but T3 Code on {host} did not answer"'],
-    ff444db47a6c5d7b: ["ICU", '"T3 Code on {host} sent an unexpected answer"'],
-    e7d37a933a7e89f5: ["ICU", '"T3 Code on {host} did not accept this device"'],
-    b7e1fa98dd44a903: ["ICU", '"T3 Code on {host} did not answer"'],
     b73e30d8d9cf80ae: [
       "ICU",
       '"Connect this device to the internet. T3 Code reconnects on its own."',
     ],
     c8a0daf6db0928f3: ["ICU", '"Wait a moment. T3 Code retries on its own."'],
     "25bb53e6f08b6ce6": ["ICU", '"If it keeps waiting, reload or restart T3 Code on this device."'],
-    "6c043146ff104471": ["ICU", '"Update T3 Code on {host}."'],
     "3ca9e905a0e76944": ["ICU", '"Wait a minute. T3 Code retries on its own."'],
     "62d01449990d28a4": ["ICU", '"Wait a few minutes. T3 Code retries on its own."'],
-    "6671e2adfb0e35b3": ["ICU", '"Make sure {host} is awake and T3 Code is running on it."'],
-    b5aacc0b9163c0e3: ["ICU", '"Open or restart T3 Code on {host}."'],
     a11d4c010567faac: ["ICU", '"Restart T3 Code on this device."'],
-    "964a38e20cc7ecda": ["ICU", '"Make sure T3 Code is running on {host}."'],
-    "11e2222747466460": ["ICU", '"T3 Code on {host}"'],
-    "93e37fedae7eaa5b": ["ICU", '"T3 Code on {host} was too busy to answer."'],
-    "3aa15bfbe1920376": ["ICU", '"Update T3 Code on {host} manually; it cannot update itself."'],
-    "71907f57b7ec64d5": ["ICU", '"{host} did not come back on a compatible T3 Code version."'],
-    e17ef8aff174e6fe: [
-      "ICU",
-      '"Offline for a while, so its T3 Connect tunnel was removed. Start T3 Code on that computer and update it to the latest version to reconnect."',
-    ],
     "3e46fbf3eadf0745": [
       "ICU",
       '"Those threads and any archived threads are deleted from T3 Code. Provider sessions are kept."',
@@ -65,29 +44,15 @@ export const BRAND = {
     ],
     "4410caad205bcac7": ["ICU", '"This link names a pull request T3 Code cannot read."'],
     "6024bfa21d5b2f40": ["ICU", '"This link names a repository T3 Code cannot read."'],
-    "111a308f2cba6e4b": [
-      "ICU",
-      '"Version mismatch. Try syncing the client and server to the same T3 Code version."',
-    ],
     "5913ebf4c3738995": [
       "ICU",
       '"T3 Code cannot install the relay client automatically on {platform}-{arch}."',
     ],
-    "2dc0997e37a2287f": ["ICU", '"Update this environment\'s T3 Code server to use side chats."'],
     f1db0a234c777a1d: ["ICU", '"Use T3 Code in another app (MCP)"'],
     "0c01f791ecef34ad": ["ICU", '"T3 Code environment"'],
-    "5ba39b13f1bfe4f5": ["JSX", '"Your agents run on your computer. Start T3 Code there first."'],
     "9371d8cc390a8a1b": [
       "ICU",
       '"Browser previews are only available in the T3 Code desktop app."',
-    ],
-    c5422ea828b540ed: [
-      "ICU",
-      '"Update the T3 Code desktop apps on {servers}? They will close and relaunch on those machines."',
-    ],
-    c10262062b7f9a5e: [
-      "ICU",
-      '"Update the T3 Code desktop app that runs the {serverLabel}? It will close and relaunch on that machine."',
     ],
     "007ab0ba4a0318eb": [
       "ICU",
@@ -109,34 +74,12 @@ export const BRAND = {
       "ICU",
       '"Install update and restart T3 Code?\\n\\nAny running tasks will be interrupted. Make sure you\'re ready before continuing."',
     ],
-    "2e79897eb713ed26": [
-      "ICU",
-      '"{label} runs T3 Code {serverVersion}, but this desktop is {appVersion}, and that server could not accept its pairing. Restart the T3 server on {label} so it runs {appVersion}, then retry."',
-    ],
     ee8d5e90fd58f838: ["ICU", '"T3 Code could not add the project."'],
     d51dbcd93da79694: ["ICU", '"T3 Code could not open a new thread."'],
     "075aa3cad9e5bf40": ["ICU", '"Open T3 Code in the desktop app to use the in-app preview."'],
     "33194f3e1b80f838": [
       "JSX",
       '["Get one from Use T3 Code in another app (MCP), Settings → Sharing & access, or"," ",{"t":"code","i":1,"c":"t3 auth pairing create"}," on this machine."]',
-    ],
-    de5c52c3f47ff209: ["JSX", '"Sent by T3 Code"'],
-    "90062342f04966ff": [
-      "ICU",
-      '"Update this environment\'s T3 Code server to browse pull requests."',
-    ],
-    "42ade0e14ff6af94": ["ICU", '"Update this environment\'s T3 Code server to browse issues."'],
-    "0cb5a221e9e13a4e": [
-      "JSX",
-      '"The agent reads T3 Code\'s logs and source here, and asks before it applies a fix or posts anything."',
-    ],
-    fe2ff84504c41600: [
-      "ICU",
-      '"T3 Code is preparing this environment for secure access through T3 Connect."',
-    ],
-    afdd35f49f2ab0a7: [
-      "ICU",
-      '"T3 Code needs the relay client to make this environment available through T3 Connect."',
     ],
     "2eadb8e0944eeee6": ["JSX", '"Keep T3 Code open while the relay client is installed."'],
     "3683040758069062": [
@@ -147,8 +90,6 @@ export const BRAND = {
       "JSX",
       '["Enter the password or verification code required by"," ",{"t":"code","i":1,"c":{"i":2,"k":"_gt_value_2","v":"v"}},". T3 Code passes your response to the local SSH process and keeps it in memory to reuse for this host. T3 Code does not write it to disk."]',
     ],
-    "6bf09d4b7e4ba53b": ["ICU", '"Update T3 Code on {environment}"'],
-    "1505e983a4f9b08d": ["JSX", '["Restart T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"},"."]'],
     "0d22cd9e3b9d94f0": ["ICU", '"T3 Code could not confirm this workspace."'],
     edf393ff951b533a: ["JSX", '"Welcome to T3 Code"'],
     fbaa47ab5f038cfc: ["ICU", '"Preview is only available in the T3 Code desktop app."'],
@@ -161,11 +102,6 @@ export const BRAND = {
       "ICU",
       '"{count, plural, one {T3 Code removed {count} hidden character. Read the prompt before you send it.} other {T3 Code removed {count} hidden characters. Read the prompt before you send it.}}"',
     ],
-    "9dc5ed64675c0a3d": [
-      "ICU",
-      '"This machine cannot clone from a link. Update T3 Code on it, or clone the repository from the command palette."',
-    ],
-    ebf96a2bb1345a4b: ["ICU", '"Update your T3 Code servers to browse pull requests."'],
     "9d7376f252f4b80f": [
       "ICU",
       '"Access is still required. Quit and reopen T3 Code if you just allowed it, then retry the import."',
@@ -210,10 +146,6 @@ export const BRAND = {
       "ICU",
       '"Let your other devices connect to T3 Code over the network. Pair devices to give them access. T3 Code will restart."',
     ],
-    a3fe8c741fd5c391: [
-      "ICU",
-      '"Devices connected over your local network will disconnect. Existing tunnels, such as T3 Connect or Tailscale HTTPS, keep working. T3 Code will restart."',
-    ],
     "7da9fdb497073305": [
       "ICU",
       '"T3 Code will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."',
@@ -239,15 +171,6 @@ export const BRAND = {
       "JSX",
       '"T3 Code will restart the local backend with Tailscale Serve enabled and ask Tailscale to proxy HTTPS traffic to this backend."',
     ],
-    "9a0d99b375ecd0b0": ["ICU", '"T3 Code there restarts and is back in about {minutes} min."'],
-    "98d92702c1426703": [
-      "ICU",
-      '"Restarts T3 Code there. It will be offline for about {minutes} min."',
-    ],
-    f264722f7ad117ad: [
-      "JSX",
-      '["T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"}," stops, rebuilds its database, and starts again. It will be offline for about ",{"i":2,"k":"_gt_value_2","v":"v"}," min. Running agents stop when it restarts."]',
-    ],
     "84b0f6ddab031f84": [
       "ICU",
       '"Clicking a pull request link opens it in T3 Code. Turn off to open pull request links like any other link, on your git host."',
@@ -262,10 +185,6 @@ export const BRAND = {
       "JSX",
       '["Let the Device panel lease simulators and emulators from your own"," ",{"t":"a","i":1,"c":"Simlock"}," ","pool, added in"," ",{"t":"Link","i":2,"c":"Devices"},". An alpha that may change or break. T3 Code never installs Simlock."]',
     ],
-    "6698127fcc912f23": [
-      "ICU",
-      '"Link another machine running T3 Code, such as a VPS, so agents here can launch and drive threads there."',
-    ],
     d1781a918f8a11cf: [
       "ICU",
       '"Run agents on this computer. Turn off to use T3 Code only with remote environments."',
@@ -278,24 +197,11 @@ export const BRAND = {
       "ICU",
       '"T3 Code will restart and start running a server on this computer again."',
     ],
-    "73da41e93823fd71": [
-      "JSX",
-      '["We do not recommend managing multiple ",{"i":1,"k":"_gt_value_1","v":"v"}," accounts in T3 Code."," ",{"t":"a","i":2,"c":"More info"}]',
-    ],
     "78196d04f05923d0": [
       "ICU",
       '"System alerts when a thread finishes, fails, or needs input or approval. Applies to this device while T3 Code is open."',
     ],
     b7e33c69bf8a50d0: ["ICU", '"Leave blank to let T3 Code spawn the server when needed."'],
-    "818e1ff39ebdf4a6": ["ICU", '"Run `t3 connect link` on the host, then restart T3 Code there."'],
-    e450f26e1af0a074: [
-      "ICU",
-      '"This environment runs an older T3 Code. Update it to schedule a one-time task, or pick another schedule."',
-    ],
-    "69dc1b9968c66243": [
-      "JSX",
-      '["Update T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"}," to manage its secret providers."]',
-    ],
     "0bea89b44e5a2d70": ["ICU", '"T3 Code already uses this for \\"{command}\\"."'],
     b3fde588367c4157: [
       "ICU",
@@ -307,13 +213,8 @@ export const BRAND = {
       "ICU",
       '"This provider is installed but disabled for new sessions in T3 Code."',
     ],
-    "4832594df0aad785": [
-      "ICU",
-      '"This environment does not support this setting. Update T3 Code on it."',
-    ],
     "8aa6404c8018ea67": ["ICU", '"T3 Code home"'],
     cc07974b25287234: ["ICU", '"T3 Code could not read the folder\'s path."'],
-    f13e08bd3614112e: ["ICU", '"update T3 Code on that machine"'],
     "626bcbe04dc55f93": [
       "ICU",
       '"T3 Code is still on {current}. Install {version} again from the update button."',
@@ -346,26 +247,6 @@ export const BRAND = {
       "ICU",
       '"Falling back to the Windows backend so T3 Code can open. Re-enable the WSL backend from Settings > Sharing & access once the WSL distro is fixed."',
     ],
-    a4acf18834787a4f: [
-      "ICU",
-      '"Another T3 Code server, such as the background service, is using this data directory, or an older background service is set up for it. Stop that server or try `t3 update`. If the older launcher cannot update, run `t3 service uninstall` and optionally reinstall with `t3 service install` from a current CLI. Use `npx t3@latest` if `t3` is missing or outdated, and pass `--base-dir` with the service\'s T3 home to each command. Then reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
-    ],
-    "0e306130a55a3954": [
-      "ICU",
-      '"The T3 Code background service is using this T3 home (PID {pid}, port {port}, version {version}). Stop it with `t3 service uninstall`, passing `--base-dir` with this T3 home, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
-    ],
-    "7379a43c1ac009d2": [
-      "ICU",
-      '"The T3 Code background service is using this T3 home (PID {pid}, port {port}). Stop it with `t3 service uninstall`, passing `--base-dir` with this T3 home, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
-    ],
-    "1510c6547cde9c2e": [
-      "ICU",
-      '"Another T3 Code server (for example `t3 serve`, or one started over SSH) is using this T3 home (PID {pid}, port {port}, version {version}). If a T3 Code app on another machine started it over SSH, that app restarts it: remove or disconnect that SSH environment there, or quit that app. Then stop the server, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
-    ],
-    "8d8628520de0d9f1": [
-      "ICU",
-      '"Another T3 Code server (for example `t3 serve`, or one started over SSH) is using this T3 home (PID {pid}, port {port}). If a T3 Code app on another machine started it over SSH, that app restarts it: remove or disconnect that SSH environment there, or quit that app. Then stop the server, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
-    ],
     ea4f056c8f6b5c15: ["ICU", '"↑ Drag T3 Code into the list above"'],
     "4bcb0f4db00936b1": ["ICU", '"Drag T3 Code to System Settings, or click to reveal in Finder"'],
     "935a340963533dcf": [
@@ -395,36 +276,15 @@ export const BRAND = {
       "ICU",
       '"Give T3 Code Full Disk Access in System Settings → Privacy & Security, then retry."',
     ],
-    "64d380898f3dc4ee": [
-      "ICU",
-      '"This client requires a newer server. Update T3 Code on {host} to connect."',
-    ],
-    "64e8bf8f894e8d4b": ["ICU", '"{host} runs an older T3 Code"'],
-    "34e205f55d30b081": ["ICU", '"Tunnel works, but T3 Code on {host} did not answer"'],
-    ff444db47a6c5d7b: ["ICU", '"T3 Code on {host} sent an unexpected answer"'],
-    e7d37a933a7e89f5: ["ICU", '"T3 Code on {host} did not accept this device"'],
-    b7e1fa98dd44a903: ["ICU", '"T3 Code on {host} did not answer"'],
     b73e30d8d9cf80ae: [
       "ICU",
       '"Connect this device to the internet. T3 Code reconnects on its own."',
     ],
     c8a0daf6db0928f3: ["ICU", '"Wait a moment. T3 Code retries on its own."'],
     "25bb53e6f08b6ce6": ["ICU", '"If it keeps waiting, reload or restart T3 Code on this device."'],
-    "6c043146ff104471": ["ICU", '"Update T3 Code on {host}."'],
     "3ca9e905a0e76944": ["ICU", '"Wait a minute. T3 Code retries on its own."'],
     "62d01449990d28a4": ["ICU", '"Wait a few minutes. T3 Code retries on its own."'],
-    "6671e2adfb0e35b3": ["ICU", '"Make sure {host} is awake and T3 Code is running on it."'],
-    b5aacc0b9163c0e3: ["ICU", '"Open or restart T3 Code on {host}."'],
     a11d4c010567faac: ["ICU", '"Restart T3 Code on this device."'],
-    "964a38e20cc7ecda": ["ICU", '"Make sure T3 Code is running on {host}."'],
-    "11e2222747466460": ["ICU", '"T3 Code on {host}"'],
-    "93e37fedae7eaa5b": ["ICU", '"T3 Code on {host} was too busy to answer."'],
-    "3aa15bfbe1920376": ["ICU", '"Update T3 Code on {host} manually; it cannot update itself."'],
-    "71907f57b7ec64d5": ["ICU", '"{host} did not come back on a compatible T3 Code version."'],
-    e17ef8aff174e6fe: [
-      "ICU",
-      '"Offline for a while, so its T3 Connect tunnel was removed. Start T3 Code on that computer and update it to the latest version to reconnect."',
-    ],
     "3e46fbf3eadf0745": [
       "ICU",
       '"Those threads and any archived threads are deleted from T3 Code. Provider sessions are kept."',
@@ -452,19 +312,152 @@ export const BRAND = {
     "4410caad205bcac7": ["ICU", '"This link names a pull request T3 Code cannot read."'],
     "6024bfa21d5b2f40": ["ICU", '"This link names a repository T3 Code cannot read."'],
     "30958cbc5d9ac66a": ["ICU", '"T3 Code, Threads"'],
-    "6bf09d4b7e4ba53b": ["ICU", '"Update T3 Code on {environment}"'],
-    b42f0ff267623384: [
-      "ICU",
-      '"{environment} runs a version of T3 Code that can\'t open its localhost pages on this device. Update it there, then try again."',
-    ],
-    cc0ec193d9b3dff0: ["ICU", '"Update the environment\'s T3 Code server to browse issues."'],
-    f85d094706a8e4a6: ["ICU", '"Sent by T3 Code"'],
-    b34935e6e057ff8e: ["ICU", '"Update T3 Code to transcribe on an environment."'],
   },
 } as const;
 
 export const KEEP = {
   web: {
+    // The host may run upstream T3 Code.
+    "64d380898f3dc4ee": [
+      "ICU",
+      '"This client requires a newer server. Update T3 Code on {host} to connect."',
+    ],
+    // The host may run upstream T3 Code.
+    "64e8bf8f894e8d4b": ["ICU", '"{host} runs an older T3 Code"'],
+    // The host may run upstream T3 Code.
+    "34e205f55d30b081": ["ICU", '"Tunnel works, but T3 Code on {host} did not answer"'],
+    // The host may run upstream T3 Code.
+    ff444db47a6c5d7b: ["ICU", '"T3 Code on {host} sent an unexpected answer"'],
+    // The host may run upstream T3 Code.
+    e7d37a933a7e89f5: ["ICU", '"T3 Code on {host} did not accept this device"'],
+    // The host may run upstream T3 Code.
+    b7e1fa98dd44a903: ["ICU", '"T3 Code on {host} did not answer"'],
+    // The host may run upstream T3 Code.
+    "6c043146ff104471": ["ICU", '"Update T3 Code on {host}."'],
+    // The host may run upstream T3 Code.
+    "6671e2adfb0e35b3": ["ICU", '"Make sure {host} is awake and T3 Code is running on it."'],
+    // The host may run upstream T3 Code.
+    b5aacc0b9163c0e3: ["ICU", '"Open or restart T3 Code on {host}."'],
+    // The host may run upstream T3 Code.
+    "964a38e20cc7ecda": ["ICU", '"Make sure T3 Code is running on {host}."'],
+    // The host may run upstream T3 Code.
+    "11e2222747466460": ["ICU", '"T3 Code on {host}"'],
+    // The host may run upstream T3 Code.
+    "93e37fedae7eaa5b": ["ICU", '"T3 Code on {host} was too busy to answer."'],
+    // The host may run upstream T3 Code.
+    "3aa15bfbe1920376": ["ICU", '"Update T3 Code on {host} manually; it cannot update itself."'],
+    // The host may run upstream T3 Code.
+    "71907f57b7ec64d5": ["ICU", '"{host} did not come back on a compatible T3 Code version."'],
+    // Names the upstream T3 Connect service.
+    e17ef8aff174e6fe: [
+      "ICU",
+      '"Offline for a while, so its T3 Connect tunnel was removed. Start T3 Code on that computer and update it to the latest version to reconnect."',
+    ],
+    // The server in a version mismatch may be upstream T3 Code.
+    "111a308f2cba6e4b": [
+      "ICU",
+      '"Version mismatch. Try syncing the client and server to the same T3 Code version."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "2dc0997e37a2287f": ["ICU", '"Update this environment\'s T3 Code server to use side chats."'],
+    // The app on the user's other computer may be upstream T3 Code.
+    "5ba39b13f1bfe4f5": ["JSX", '"Your agents run on your computer. Start T3 Code there first."'],
+    // The desktop app on the remote machine may be upstream T3 Code.
+    c5422ea828b540ed: [
+      "ICU",
+      '"Update the T3 Code desktop apps on {servers}? They will close and relaunch on those machines."',
+    ],
+    // The desktop app on the remote machine may be upstream T3 Code.
+    c10262062b7f9a5e: [
+      "ICU",
+      '"Update the T3 Code desktop app that runs the {serverLabel}? It will close and relaunch on that machine."',
+    ],
+    // The pairing target may run upstream T3 Code.
+    "2e79897eb713ed26": [
+      "ICU",
+      '"{label} runs T3 Code {serverVersion}, but this desktop is {appVersion}, and that server could not accept its pairing. Restart the T3 server on {label} so it runs {appVersion}, then retry."',
+    ],
+    // The sender may be an upstream T3 Code server.
+    de5c52c3f47ff209: ["JSX", '"Sent by T3 Code"'],
+    // The selected environment may run upstream T3 Code.
+    "90062342f04966ff": [
+      "ICU",
+      '"Update this environment\'s T3 Code server to browse pull requests."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "42ade0e14ff6af94": ["ICU", '"Update this environment\'s T3 Code server to browse issues."'],
+    // Triage reads upstream source and files issues upstream.
+    "0cb5a221e9e13a4e": [
+      "JSX",
+      '"The agent reads T3 Code\'s logs and source here, and asks before it applies a fix or posts anything."',
+    ],
+    // Names the upstream T3 Connect service.
+    fe2ff84504c41600: [
+      "ICU",
+      '"T3 Code is preparing this environment for secure access through T3 Connect."',
+    ],
+    // Names the upstream T3 Connect service.
+    afdd35f49f2ab0a7: [
+      "ICU",
+      '"T3 Code needs the relay client to make this environment available through T3 Connect."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "6bf09d4b7e4ba53b": ["ICU", '"Update T3 Code on {environment}"'],
+    // The selected environment may run upstream T3 Code.
+    "1505e983a4f9b08d": ["JSX", '["Restart T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"},"."]'],
+    // The selected environment may run upstream T3 Code.
+    "9dc5ed64675c0a3d": [
+      "ICU",
+      '"This machine cannot clone from a link. Update T3 Code on it, or clone the repository from the command palette."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    ebf96a2bb1345a4b: ["ICU", '"Update your T3 Code servers to browse pull requests."'],
+    // Names the upstream T3 Connect service.
+    a3fe8c741fd5c391: [
+      "ICU",
+      '"Devices connected over your local network will disconnect. Existing tunnels, such as T3 Connect or Tailscale HTTPS, keep working. T3 Code will restart."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "9a0d99b375ecd0b0": ["ICU", '"T3 Code there restarts and is back in about {minutes} min."'],
+    // The selected environment may run upstream T3 Code.
+    "98d92702c1426703": [
+      "ICU",
+      '"Restarts T3 Code there. It will be offline for about {minutes} min."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    f264722f7ad117ad: [
+      "JSX",
+      '["T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"}," stops, rebuilds its database, and starts again. It will be offline for about ",{"i":2,"k":"_gt_value_2","v":"v"}," min. Running agents stop when it restarts."]',
+    ],
+    // The linked machine may run upstream T3 Code.
+    "6698127fcc912f23": [
+      "ICU",
+      '"Link another machine running T3 Code, such as a VPS, so agents here can launch and drive threads there."',
+    ],
+    // The More info link opens upstream's FAQ.
+    "73da41e93823fd71": [
+      "JSX",
+      '["We do not recommend managing multiple ",{"i":1,"k":"_gt_value_1","v":"v"}," accounts in T3 Code."," ",{"t":"a","i":2,"c":"More info"}]',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "818e1ff39ebdf4a6": ["ICU", '"Run `t3 connect link` on the host, then restart T3 Code there."'],
+    // The selected environment may run upstream T3 Code.
+    e450f26e1af0a074: [
+      "ICU",
+      '"This environment runs an older T3 Code. Update it to schedule a one-time task, or pick another schedule."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "69dc1b9968c66243": [
+      "JSX",
+      '["Update T3 Code on ",{"i":1,"k":"_gt_value_1","v":"v"}," to manage its secret providers."]',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "4832594df0aad785": [
+      "ICU",
+      '"This environment does not support this setting. Update T3 Code on it."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    f13e08bd3614112e: ["ICU", '"update T3 Code on that machine"'],
     cce3d80a2ddf1125: ["ICU", '"An agent investigates a T3 Code problem and helps file an issue"'],
     eaaab38a83bf32cf: ["ICU", '"It really helps T3 Code grow."'],
     a76da92cec318964: ["ICU", '"Enjoying T3 Code?"'],
@@ -511,8 +504,83 @@ export const KEEP = {
     ccf65aac5ca40975: ["ICU", '"Check T3 Code SnapShots in GNOME Extensions, then try again."'],
     "09b4af0d2181cbbb": ["ICU", '"Drop T3 Code or VS Code .json files"'],
   },
-  desktop: {},
+  desktop: {
+    // The suggested npx command installs upstream's CLI.
+    a4acf18834787a4f: [
+      "ICU",
+      '"Another T3 Code server, such as the background service, is using this data directory, or an older background service is set up for it. Stop that server or try `t3 update`. If the older launcher cannot update, run `t3 service uninstall` and optionally reinstall with `t3 service install` from a current CLI. Use `npx t3@latest` if `t3` is missing or outdated, and pass `--base-dir` with the service\'s T3 home to each command. Then reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
+    ],
+    // The background service may be upstream T3 Code.
+    "0e306130a55a3954": [
+      "ICU",
+      '"The T3 Code background service is using this T3 home (PID {pid}, port {port}, version {version}). Stop it with `t3 service uninstall`, passing `--base-dir` with this T3 home, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
+    ],
+    // The background service may be upstream T3 Code.
+    "7379a43c1ac009d2": [
+      "ICU",
+      '"The T3 Code background service is using this T3 home (PID {pid}, port {port}). Stop it with `t3 service uninstall`, passing `--base-dir` with this T3 home, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
+    ],
+    // The other server or SSH app may be upstream T3 Code.
+    "1510c6547cde9c2e": [
+      "ICU",
+      '"Another T3 Code server (for example `t3 serve`, or one started over SSH) is using this T3 home (PID {pid}, port {port}, version {version}). If a T3 Code app on another machine started it over SSH, that app restarts it: remove or disconnect that SSH environment there, or quit that app. Then stop the server, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
+    ],
+    // The other server or SSH app may be upstream T3 Code.
+    "8d8628520de0d9f1": [
+      "ICU",
+      '"Another T3 Code server (for example `t3 serve`, or one started over SSH) is using this T3 home (PID {pid}, port {port}). If a T3 Code app on another machine started it over SSH, that app restarts it: remove or disconnect that SSH environment there, or quit that app. Then stop the server, and reopen T3 Code. You can also set a separate T3CODE_HOME and pair with the running server."',
+    ],
+  },
   mobile: {
+    // The host may run upstream T3 Code.
+    "64d380898f3dc4ee": [
+      "ICU",
+      '"This client requires a newer server. Update T3 Code on {host} to connect."',
+    ],
+    // The host may run upstream T3 Code.
+    "64e8bf8f894e8d4b": ["ICU", '"{host} runs an older T3 Code"'],
+    // The host may run upstream T3 Code.
+    "34e205f55d30b081": ["ICU", '"Tunnel works, but T3 Code on {host} did not answer"'],
+    // The host may run upstream T3 Code.
+    ff444db47a6c5d7b: ["ICU", '"T3 Code on {host} sent an unexpected answer"'],
+    // The host may run upstream T3 Code.
+    e7d37a933a7e89f5: ["ICU", '"T3 Code on {host} did not accept this device"'],
+    // The host may run upstream T3 Code.
+    b7e1fa98dd44a903: ["ICU", '"T3 Code on {host} did not answer"'],
+    // The host may run upstream T3 Code.
+    "6c043146ff104471": ["ICU", '"Update T3 Code on {host}."'],
+    // The host may run upstream T3 Code.
+    "6671e2adfb0e35b3": ["ICU", '"Make sure {host} is awake and T3 Code is running on it."'],
+    // The host may run upstream T3 Code.
+    b5aacc0b9163c0e3: ["ICU", '"Open or restart T3 Code on {host}."'],
+    // The host may run upstream T3 Code.
+    "964a38e20cc7ecda": ["ICU", '"Make sure T3 Code is running on {host}."'],
+    // The host may run upstream T3 Code.
+    "11e2222747466460": ["ICU", '"T3 Code on {host}"'],
+    // The host may run upstream T3 Code.
+    "93e37fedae7eaa5b": ["ICU", '"T3 Code on {host} was too busy to answer."'],
+    // The host may run upstream T3 Code.
+    "3aa15bfbe1920376": ["ICU", '"Update T3 Code on {host} manually; it cannot update itself."'],
+    // The host may run upstream T3 Code.
+    "71907f57b7ec64d5": ["ICU", '"{host} did not come back on a compatible T3 Code version."'],
+    // Names the upstream T3 Connect service.
+    e17ef8aff174e6fe: [
+      "ICU",
+      '"Offline for a while, so its T3 Connect tunnel was removed. Start T3 Code on that computer and update it to the latest version to reconnect."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    "6bf09d4b7e4ba53b": ["ICU", '"Update T3 Code on {environment}"'],
+    // The selected environment may run upstream T3 Code.
+    b42f0ff267623384: [
+      "ICU",
+      '"{environment} runs a version of T3 Code that can\'t open its localhost pages on this device. Update it there, then try again."',
+    ],
+    // The selected environment may run upstream T3 Code.
+    cc0ec193d9b3dff0: ["ICU", '"Update the environment\'s T3 Code server to browse issues."'],
+    // The sender may be an upstream T3 Code server.
+    f85d094706a8e4a6: ["ICU", '"Sent by T3 Code"'],
+    // The selected environment may run upstream T3 Code.
+    b34935e6e057ff8e: ["ICU", '"Update T3 Code to transcribe on an environment."'],
     "58df920ec2681250": [
       "JSX",
       '"When the app crashes or hits an error, it sends the error message, the stack trace, the app version, and the device model and OS version to the T3 Code team. Each launch also sends startup timings. Reports carry a random ID for this install."',
