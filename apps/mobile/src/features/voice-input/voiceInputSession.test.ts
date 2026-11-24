@@ -64,37 +64,64 @@ function createSession(
 describe("global voice input", () => {
   beforeEach(() => resetVoiceInputGlobalsForTests());
 
-  it("ducks other audio while voice mode owns the session and restores the audio mode on release", async () => {
-    audio.setMode.mockClear();
-    audio.setActive.mockClear();
-    const token = acquireAudioSession("voice-mode");
+  it.each(["voice-mode", "voice-mode-speech"] as const)(
+    "ducks other audio and restores the audio mode when %s releases",
+    async (kind) => {
+      const token = acquireAudioSession(kind);
+      try {
+        try {
+          expect(await activateAudioSession(token)).toBe(true);
+          expect(audio.setMode.mock.calls).toEqual([
+            [
+              {
+                allowsRecording: kind === "voice-mode",
+                interruptionMode: "duckOthers",
+                playsInSilentMode: true,
+                shouldPlayInBackground: false,
+              },
+            ],
+          ]);
+          expect(audio.setActive).toHaveBeenLastCalledWith(true);
+          const playback = acquireAudioSession("playback");
+          expect(await activateAudioSession(playback)).toBe(false);
+          await releaseAudioSession(playback);
+          expect(isAudioSessionOwner(token)).toBe(true);
+        } finally {
+          await releaseAudioSession(token);
+        }
+        expect(audio.setActive.mock.calls).toEqual([[true], [false]]);
+        expect(audio.setMode).toHaveBeenLastCalledWith({ allowsRecording: false });
+        expect(isAudioSessionOwner(token)).toBe(false);
+      } finally {
+        vi.clearAllMocks();
+      }
+    },
+  );
+
+  it.each([
+    ["voice-mode-speech", "voice-mode"],
+    ["voice-mode", "voice-mode-speech"],
+  ] as const)("hands off from %s to %s without deactivating", async (from, to) => {
+    const cancel = vi.fn();
+    const previous = acquireAudioSession(from, cancel);
     try {
-      expect(await activateAudioSession(token)).toBe(true);
-      expect(audio.setMode.mock.calls).toEqual([
-        [
-          {
-            allowsRecording: true,
-            interruptionMode: "duckOthers",
-            playsInSilentMode: true,
-            shouldPlayInBackground: false,
-          },
-        ],
-      ]);
-      expect(audio.setActive).toHaveBeenLastCalledWith(true);
-      const playback = acquireAudioSession("playback");
-      expect(await activateAudioSession(playback)).toBe(false);
-      await releaseAudioSession(playback);
-      expect(isAudioSessionOwner(token)).toBe(true);
+      expect(await activateAudioSession(previous)).toBe(true);
+      const next = acquireAudioSession(to);
+      try {
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(await activateAudioSession(next)).toBe(true);
+        await releaseAudioSession(previous);
+        expect(isAudioSessionOwner(next)).toBe(true);
+        expect(audio.setActive.mock.calls).toEqual([[true], [true]]);
+        expect(audio.setMode).toHaveBeenCalledTimes(2);
+      } finally {
+        await releaseAudioSession(next);
+      }
+      expect(audio.setActive.mock.calls).toEqual([[true], [true], [false]]);
     } finally {
-      await releaseAudioSession(token);
+      await releaseAudioSession(previous);
+      vi.clearAllMocks();
     }
-    expect(audio.setActive.mock.calls).toEqual([[true], [false]]);
-    expect(audio.setMode).toHaveBeenLastCalledWith({
-      allowsRecording: false,
-      interruptionMode: "mixWithOthers",
-    });
-    expect(isAudioSessionOwner(token)).toBe(false);
-    vi.clearAllMocks();
   });
 
   it.each(["retry", "takeover"])(
@@ -392,11 +419,17 @@ describe("global voice input", () => {
       expect(publishAudioLevels).not.toHaveBeenCalled();
       expect(onMeteringSample).toHaveBeenLastCalledWith(0);
 
+      onMeteringSample.mockImplementationOnce(() => {
+        throw new Error("Metering listener failed");
+      });
       sample = { durationMillis: 2_400, metering: 0 };
       vi.advanceTimersByTime(80);
       expect(session.getSnapshot().elapsedSeconds).toBe(2);
       expect(publishAudioLevels).toHaveBeenLastCalledWith(expect.arrayContaining([1]));
       expect(onMeteringSample.mock.calls).toEqual([[0], [1]]);
+
+      vi.advanceTimersByTime(80);
+      expect(onMeteringSample.mock.calls).toEqual([[0], [1], [1]]);
 
       await session.controller.stop();
       expect(releaseKeepAwake).toHaveBeenCalledTimes(1);
@@ -405,7 +438,7 @@ describe("global voice input", () => {
       vi.advanceTimersByTime(800);
       expect(publishAudioLevels).toHaveBeenCalledTimes(publishedLevels);
       expect(snapshots).toHaveLength(publishedSnapshots);
-      expect(onMeteringSample).toHaveBeenCalledTimes(2);
+      expect(onMeteringSample).toHaveBeenCalledTimes(3);
       // The finished recording's time stays readable until the next one starts.
       expect(session.getSnapshot().elapsedSeconds).toBe(2);
 

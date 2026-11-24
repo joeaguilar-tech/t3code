@@ -9,11 +9,38 @@ type SpeechCallbacks = {
 };
 
 const native = vi.hoisted(() => ({
-  speak: vi.fn<(text: string, callbacks: SpeechCallbacks) => void>(),
+  speak: vi.fn<(text: string, callbacks: SpeechCallbacks) => void | Promise<void>>(),
   stop: vi.fn(async () => {}),
 }));
 
-vi.mock("expo-speech", () => native);
+vi.mock("expo-speech", () => ({
+  maxSpeechInputLength: 12,
+  speak: (text: string, callbacks: SpeechCallbacks) => {
+    void native.speak(text, callbacks);
+  },
+  stop: native.stop,
+}));
+
+vi.mock("expo", () => ({
+  requireNativeModule: () => {
+    const listeners = new Map<string, (event: { id: string }) => void>();
+    return {
+      addListener: (event: string, listener: (event: { id: string }) => void) => {
+        listeners.set(event, listener);
+        return { remove: () => listeners.delete(event) };
+      },
+      speak: (id: string, text: string) =>
+        Promise.resolve(
+          native.speak(text, {
+            onDone: () => listeners.get("Exponent.speakingDone")?.({ id }),
+            onStopped: () => listeners.get("Exponent.speakingStopped")?.({ id }),
+            onError: () => listeners.get("Exponent.speakingError")?.({ id }),
+          }),
+        ),
+      stop: native.stop,
+    };
+  },
+}));
 
 it("waits for the previous native stop before speaking again", async () => {
   native.speak.mockReset();
@@ -31,7 +58,6 @@ it("waits for the previous native stop before speaking again", async () => {
   });
 
   const first = speak("First");
-  expect(native.speak).not.toHaveBeenCalledWith("Second", expect.anything());
   expect(await Promise.race([first.then(() => null), firstStarted.promise])).not.toBeNull();
   const second = speak("Second");
   await stopStarted.promise;
@@ -61,4 +87,45 @@ it.each(["stop", "native stop", "error"])("resolves the utterance on %s", async 
     callbacks?.onError(new Error("Speech failed"));
   }
   await utterance;
+});
+
+it("stops before native speech starts", async () => {
+  native.speak.mockReset();
+  native.stop.mockReset();
+  const utterance = speak("Reply");
+  await stopSpeaking();
+  await utterance;
+  expect(native.speak).not.toHaveBeenCalled();
+  expect(native.stop).not.toHaveBeenCalled();
+});
+
+it.each(["over-limit text", "native rejection"])("settles speech with %s", async (outcome) => {
+  native.speak.mockReset();
+  native.stop.mockReset();
+  const started = Promise.withResolvers<SpeechCallbacks>();
+  const failure = Promise.reject(new Error("Native speech failed"));
+  // Observe the rejected fixture even when the public Expo wrapper discards it.
+  const rejection = failure.catch(() => {});
+  native.speak.mockImplementationOnce((_text, callbacks) => {
+    started.resolve(callbacks);
+    if (outcome === "native rejection") return failure;
+    callbacks.onDone();
+  });
+
+  const text = outcome === "over-limit text" ? "Read this long reply" : "Reply";
+  const utterance = speak(text);
+  try {
+    await started.promise;
+    if (outcome === "over-limit text") {
+      expect(native.speak).toHaveBeenCalledWith(text.slice(0, 12), expect.anything());
+      await utterance;
+    } else {
+      await rejection;
+      await Promise.resolve();
+      const pending = Symbol("pending");
+      expect(await Promise.race([utterance, Promise.resolve(pending)])).toBeUndefined();
+    }
+  } finally {
+    await stopSpeaking();
+  }
 });
