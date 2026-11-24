@@ -1,3 +1,4 @@
+import { MOBILE_PRODUCT_NAME } from "../../../lib/mobileProductBrand";
 import { useGT } from "gt-react-native";
 import { useEffect, useState } from "react";
 import { useNavigation, useNavigationState } from "@react-navigation/native";
@@ -60,7 +61,7 @@ export function WorkspaceListHeader(props: WorkspaceListHeaderProps) {
 
   return (
     <AppBar
-      title="T3 Code"
+      title={MOBILE_PRODUCT_NAME}
       titleContent={
         <WorkspaceBrandTitle
           accessibilityLabel={props.accessibilityLabel}

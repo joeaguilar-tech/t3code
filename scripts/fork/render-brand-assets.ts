@@ -20,7 +20,7 @@ const renderAsset = <A>(path: string, render: () => Promise<A>) =>
 const brand = resolveForkBrand("j3");
 if (!brand) throw new Error("Missing fork assets");
 
-const { source, macIconPng, windowsIconIco, web } = brand.assets;
+const { source, macIconPng, windowsIconIco, mobile, web } = brand.assets;
 
 function render(size: number) {
   return sharp(source, { density: 576 }).resize(size, size).png();
@@ -46,9 +46,27 @@ async function renderIco(sizes: readonly number[]) {
 
 await Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const svg = yield* fs.readFileString(source);
+  const mark = svg.replace(/<rect[^>]*\/>/u, "");
+  const renderAndroidLayer = (art: string) => sharp(Buffer.from(art)).resize(432, 432).png();
   yield* Effect.all(
     [
       renderAsset(macIconPng, () => render(1024).toFile(macIconPng)),
+      renderAsset(mobile.androidForegroundPng, () =>
+        renderAndroidLayer(mark).toFile(mobile.androidForegroundPng),
+      ),
+      renderAsset(mobile.androidMonochromePng, () =>
+        renderAndroidLayer(mark.replace(/stroke="[^"]*"/u, 'stroke="#ffffff"')).toFile(
+          mobile.androidMonochromePng,
+        ),
+      ),
+      renderAsset(mobile.androidSplashPng, () =>
+        sharp(Buffer.from(svg))
+          .resize(192, 192)
+          .extend({ top: 48, bottom: 48, left: 48, right: 48, background: mobile.backgroundColor })
+          .png()
+          .toFile(mobile.androidSplashPng),
+      ),
       renderAsset(web.favicon16Png, () => render(16).toFile(web.favicon16Png)),
       renderAsset(web.favicon32Png, () => render(32).toFile(web.favicon32Png)),
       renderAsset(web.appleTouchIconPng, () => render(180).toFile(web.appleTouchIconPng)),

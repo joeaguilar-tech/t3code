@@ -1,3 +1,4 @@
+import { MOBILE_PRODUCT_NAME } from "../../../lib/mobileProductBrand";
 import { WorkspaceNoTabs } from "./WorkspaceNoTabs";
 import { isSharedSlotTab } from "./navigation-tab-order";
 import { SharedSlotTitle } from "./SharedSlotTitle";
@@ -74,7 +75,10 @@ function WorkspaceRootTitle(props: {
             <SharedSlotTitle tab={state.selectedTab} />
           ) : (
             <CompactBrandTitle
-              accessibilityLabel={gt("{product}, {title}", { product: "T3 Code", title: tabTitle })}
+              accessibilityLabel={gt("{product}, {title}", {
+                product: MOBILE_PRODUCT_NAME,
+                title: tabTitle,
+              })}
               fit
             />
           )

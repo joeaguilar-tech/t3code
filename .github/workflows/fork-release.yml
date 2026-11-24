@@ -214,6 +214,8 @@ jobs:
             src/voice-input/stream.test.ts \
             src/voice-input/voiceMode.test.ts) || ok=false
           (cd apps/mobile && run vp test run \
+            app.config.test.ts \
+            src/components/brandAssets.test.ts \
             src/features/voice-input/VoiceInputProvider.test.ts \
             src/features/voice-input/environmentTranscriber.test.ts \
             src/features/voice-input/lazyVoiceRecorder.test.ts \

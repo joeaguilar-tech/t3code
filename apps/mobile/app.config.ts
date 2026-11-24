@@ -1,3 +1,4 @@
+import { resolveForkBrand } from "@t3tools/shared/forkBrand";
 import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
@@ -132,6 +133,23 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+const brand = resolveForkBrand(repoEnv.T3CODE_BRAND);
+const productName = brand?.name ?? "T3 Code";
+const mobileArt = brand?.assets.mobile;
+const assets = mobileArt
+  ? {
+      appIcon: fromRepoRoot(mobileArt.iconPng),
+      iosIcon: fromRepoRoot(mobileArt.iconPng),
+      splashIcon: fromRepoRoot(mobileArt.iconPng),
+      androidAdaptiveForeground: fromRepoRoot(mobileArt.androidForegroundPng),
+      androidAdaptiveBackgroundColor: mobileArt.backgroundColor,
+      androidAdaptiveBackgroundImage: undefined,
+      androidSplashIcon: fromRepoRoot(mobileArt.androidSplashPng),
+      androidMonochromeIcon: fromRepoRoot(mobileArt.androidMonochromePng),
+      androidNotificationIcon: fromRepoRoot(mobileArt.androidMonochromePng),
+      androidNotificationColor: mobileArt.backgroundColor,
+    }
+  : variant.assets;
 // Copied thread links open the app. app.t3.codes/.well-known lists every variant's identifiers.
 const HOSTED_APP_HOST = "app.t3.codes";
 const iosBundleIdentifier = isIosPersonalTeamBuild
@@ -257,7 +275,7 @@ const config: ExpoConfig = {
     policy: runtimeVersionPolicy,
   },
   orientation: "portrait",
-  icon: variant.assets.appIcon,
+  icon: assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
     enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
@@ -266,7 +284,7 @@ const config: ExpoConfig = {
     fallbackToCacheTimeout: 0,
   },
   ios: {
-    icon: variant.assets.iosIcon,
+    icon: assets.iosIcon,
     supportsTablet: true,
     requireFullScreen: process.env.T3_SHOWCASE_CAPTURE_BUILD === "1",
     bundleIdentifier: iosBundleIdentifier,
@@ -293,11 +311,10 @@ const config: ExpoConfig = {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },
-      NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
+      NSLocalNetworkUsageDescription: `Allow ${productName} to connect to T3 Code servers on your local network or tailnet.`,
       // Built with the iOS 27 SDK, only view controllers can hide or style the status bar.
       UIViewControllerBasedStatusBarAppearance: true,
-      NSPhotoLibraryAddUsageDescription: "Allow T3 Code to save images to your photo library.",
+      NSPhotoLibraryAddUsageDescription: `Allow ${productName} to save images to your photo library.`,
       // System picture in picture needs background audio to start and survive outside the app.
       UIBackgroundModes: ["audio"],
       ITSAppUsesNonExemptEncryption: false,
@@ -315,18 +332,18 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    icon: variant.assets.appIcon,
+    icon: assets.appIcon,
     package: variant.androidPackage,
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
     adaptiveIcon: {
-      backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-      ...(variant.assets.androidAdaptiveBackgroundImage
-        ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+      backgroundColor: assets.androidAdaptiveBackgroundColor,
+      ...(assets.androidAdaptiveBackgroundImage
+        ? { backgroundImage: assets.androidAdaptiveBackgroundImage }
         : {}),
-      foregroundImage: variant.assets.androidAdaptiveForeground,
-      monochromeImage: variant.assets.androidMonochromeIcon,
+      foregroundImage: assets.androidAdaptiveForeground,
+      monochromeImage: assets.androidMonochromeIcon,
     },
     // JS back dispatch needs RN's Android 16 shim and withAndroidPredictiveBackCompat on Android 13-15.
     predictiveBackGestureEnabled: true,
@@ -342,7 +359,7 @@ const config: ExpoConfig = {
     ],
   },
   web: {
-    favicon: variant.assets.appIcon,
+    favicon: assets.appIcon,
   },
   plugins: [
     "expo-asset",
@@ -383,8 +400,8 @@ const config: ExpoConfig = {
     [
       "expo-notifications",
       {
-        icon: variant.assets.androidNotificationIcon,
-        color: variant.assets.androidNotificationColor,
+        icon: assets.androidNotificationIcon,
+        color: assets.androidNotificationColor,
         mode: APP_VARIANT === "development" ? "development" : "production",
       },
     ],
@@ -396,10 +413,10 @@ const config: ExpoConfig = {
       {
         androidIcons: {
           shortcut_icon: {
-            foregroundImage: variant.assets.androidAdaptiveForeground,
-            backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-            ...(variant.assets.androidAdaptiveBackgroundImage
-              ? { backgroundImage: variant.assets.androidAdaptiveBackgroundImage }
+            foregroundImage: assets.androidAdaptiveForeground,
+            backgroundColor: assets.androidAdaptiveBackgroundColor,
+            ...(assets.androidAdaptiveBackgroundImage
+              ? { backgroundImage: assets.androidAdaptiveBackgroundImage }
               : {}),
           },
         },
@@ -408,7 +425,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: `Allow ${productName} to use your microphone for voice input.`,
         recordAudioAndroid: true,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -417,7 +434,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: `Allow ${productName} to access your camera so you can scan pairing QR codes.`,
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
@@ -428,25 +445,25 @@ const config: ExpoConfig = {
       {
         photosPermission: false,
         // `false` makes this plugin add RECORD_AUDIO to blockedPermissions, breaking Android dictation.
-        microphonePermission: "Allow T3 Code to use your microphone for voice input.",
+        microphonePermission: `Allow ${productName} to use your microphone for voice input.`,
       },
     ],
     [
       "expo-splash-screen",
       {
-        image: variant.assets.splashIcon,
+        image: assets.splashIcon,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         imageWidth: 220,
         dark: {
-          image: variant.assets.splashIcon,
+          image: assets.splashIcon,
           backgroundColor: "#0a0a0a",
         },
         android: {
           // Android 12+ masks the central two thirds of the 288dp canvas; adaptive layers avoid clipped corners.
-          image: variant.assets.androidSplashIcon,
+          image: assets.androidSplashIcon,
           imageWidth: 288,
-          dark: { image: variant.assets.androidSplashIcon },
+          dark: { image: assets.androidSplashIcon },
         },
       },
     ],
@@ -489,6 +506,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    ...(brand ? { brand: repoEnv.T3CODE_BRAND } : {}),
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     stageLabel: repoEnv.T3CODE_MOBILE_STAGE_LABEL?.trim() || null,
     relay: {

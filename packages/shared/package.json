@@ -5,7 +5,7 @@
   "exports": {
     "./forkBrand": {
       "types": "./src/forkBrand.ts",
-      "import": "./src/forkBrand.ts"
+      "default": "./src/forkBrand.ts"
     },
     "./png": {
       "types": "./src/png.ts",

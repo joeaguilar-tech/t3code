@@ -10,6 +10,13 @@ const j3Brand = {
     macIconPng: icon1024,
     linuxIconPng: icon1024,
     windowsIconIco: `${root}/windows.ico`,
+    mobile: {
+      iconPng: icon1024,
+      backgroundColor: "#0F5C5C",
+      androidForegroundPng: `${root}/android-foreground.png`,
+      androidMonochromePng: `${root}/android-monochrome.png`,
+      androidSplashPng: `${root}/android-splash.png`,
+    },
     web: {
       faviconIco: `${root}/favicon.ico`,
       favicon16Png: `${root}/favicon-16x16.png`,

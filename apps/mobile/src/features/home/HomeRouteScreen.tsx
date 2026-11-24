@@ -1,3 +1,4 @@
+import { mobileForkBrand } from "../../lib/mobileProductBrand";
 import { uuidv4 } from "../../lib/uuid";
 import { ThreadUndoNotice } from "./ThreadUndoNotice";
 import { use } from "react";
@@ -165,7 +166,11 @@ export function HomeRouteScreen() {
     <AndroidHomeFabLayout onStartNewTask={startNewTask}>
       <>
         <WorkspaceListHeader
-          accessibilityLabel={gt("T3 Code, Threads")}
+          accessibilityLabel={
+            mobileForkBrand
+              ? gt("{appName}, Threads", { appName: mobileForkBrand.name })
+              : gt("T3 Code, Threads")
+          }
           onOpenEnvironments={() => openSettings(navigation, "SettingsEnvironments")}
           search={{
             value: searchQuery,

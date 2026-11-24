@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
+import { mobileForkBrand } from "../../lib/mobileProductBrand";
 import { useDeadlinePassed } from "../../lib/clock";
 import {
   type AppUpdateCheckState,
@@ -35,6 +36,11 @@ export function SettingsAboutRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <AppSettingsSection />
+        {mobileForkBrand ? (
+          <Text className="text-sm text-foreground-muted">
+            {gt("{forkNotice}", { forkNotice: mobileForkBrand.statement })}
+          </Text>
+        ) : null}
       </ScrollView>
     </SettingsScreen>
   );

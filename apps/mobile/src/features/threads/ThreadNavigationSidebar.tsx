@@ -1,3 +1,4 @@
+import { MOBILE_PRODUCT_NAME } from "../../lib/mobileProductBrand";
 import { useGT, useMessages } from "gt-react-native";
 import { useActiveNewTask } from "../../state/active-new-task";
 import { ThreadUndoNotice } from "../home/ThreadUndoNotice";
@@ -556,7 +557,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   };
   const header = (
     <WorkspaceListHeader
-      accessibilityLabel={gt("{appName}, Threads", { appName: "T3 Code" })}
+      accessibilityLabel={gt("{appName}, Threads", { appName: MOBILE_PRODUCT_NAME })}
       onOpenEnvironments={props.onOpenEnvironmentSettings}
       onOpenSettings={props.onOpenSettings}
       search={{
