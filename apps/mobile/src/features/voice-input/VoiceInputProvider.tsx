@@ -45,7 +45,7 @@ const VOICE_RECORDING_OPTIONS = {
   ...(Platform.OS === "ios" ? IOS_RECORDING_OPTIONS : ANDROID_RECORDING_OPTIONS),
 };
 
-function keepScreenAwake(tag: string): () => void {
+export function keepScreenAwake(tag: string): () => void {
   const activation = activateKeepAwakeAsync(tag);
   void activation.catch(() => {});
   // Release after activation settles, even if the recording ends immediately.
@@ -127,8 +127,8 @@ const voiceInputAtom = Atom.make((get) => {
       return transcriber === "checking" ? null : transcriber;
     },
     requestPermission: permission.requestPermission,
-    configureRecording: async () => {
-      const token = acquireAudioSession("recording");
+    configureRecording: async (kind) => {
+      const token = acquireAudioSession(kind);
       audioToken = token;
       try {
         await activateAudioSession(token);

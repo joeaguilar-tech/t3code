@@ -64,6 +64,39 @@ function createSession(
 describe("global voice input", () => {
   beforeEach(() => resetVoiceInputGlobalsForTests());
 
+  it("ducks other audio while voice mode owns the session and restores the audio mode on release", async () => {
+    audio.setMode.mockClear();
+    audio.setActive.mockClear();
+    const token = acquireAudioSession("voice-mode");
+    try {
+      expect(await activateAudioSession(token)).toBe(true);
+      expect(audio.setMode.mock.calls).toEqual([
+        [
+          {
+            allowsRecording: true,
+            interruptionMode: "duckOthers",
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+          },
+        ],
+      ]);
+      expect(audio.setActive).toHaveBeenLastCalledWith(true);
+      const playback = acquireAudioSession("playback");
+      expect(await activateAudioSession(playback)).toBe(false);
+      await releaseAudioSession(playback);
+      expect(isAudioSessionOwner(token)).toBe(true);
+    } finally {
+      await releaseAudioSession(token);
+    }
+    expect(audio.setActive.mock.calls).toEqual([[true], [false]]);
+    expect(audio.setMode).toHaveBeenLastCalledWith({
+      allowsRecording: false,
+      interruptionMode: "mixWithOthers",
+    });
+    expect(isAudioSessionOwner(token)).toBe(false);
+    vi.clearAllMocks();
+  });
+
   it.each(["retry", "takeover"])(
     "handles failed deactivation with %s without notifying a released owner",
     async (action) => {
@@ -348,18 +381,22 @@ describe("global voice input", () => {
       const snapshots: number[] = [];
       session.subscribe(() => snapshots.push(session.getSnapshot().elapsedSeconds));
 
-      await session.start(
-        createVoiceInputTarget("first", () => "first", vi.fn(), { start: 5, end: 5 }),
-      );
+      const onMeteringSample = vi.fn();
+      await session.start({
+        ...createVoiceInputTarget("first", () => "first", vi.fn(), { start: 5, end: 5 }),
+        onMeteringSample,
+      });
       expect(session.getSnapshot().state.phase).toBe("recording");
       expect(keepAwake).toHaveBeenCalledTimes(1);
       // Silence on a silent history publishes nothing.
       expect(publishAudioLevels).not.toHaveBeenCalled();
+      expect(onMeteringSample).toHaveBeenLastCalledWith(0);
 
       sample = { durationMillis: 2_400, metering: 0 };
       vi.advanceTimersByTime(80);
       expect(session.getSnapshot().elapsedSeconds).toBe(2);
       expect(publishAudioLevels).toHaveBeenLastCalledWith(expect.arrayContaining([1]));
+      expect(onMeteringSample.mock.calls).toEqual([[0], [1]]);
 
       await session.controller.stop();
       expect(releaseKeepAwake).toHaveBeenCalledTimes(1);
@@ -368,6 +405,7 @@ describe("global voice input", () => {
       vi.advanceTimersByTime(800);
       expect(publishAudioLevels).toHaveBeenCalledTimes(publishedLevels);
       expect(snapshots).toHaveLength(publishedSnapshots);
+      expect(onMeteringSample).toHaveBeenCalledTimes(2);
       // The finished recording's time stays readable until the next one starts.
       expect(session.getSnapshot().elapsedSeconds).toBe(2);
 
