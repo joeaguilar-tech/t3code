@@ -39,3 +39,18 @@ export {
   type VoiceTranscriptionErrorCode,
   type VoiceTranscriptionOptions,
 } from "./transcription.ts";
+export {
+  VoiceModeController,
+  VOICE_MODE_FAILED_PHRASE,
+  VOICE_MODE_LISTEN_WINDOW_MS,
+  VOICE_MODE_NEEDS_USER_PHRASE,
+  VOICE_MODE_WORKING_DELAY_MS,
+  VOICE_MODE_WORKING_PHRASE,
+  type VoiceModeDependencies,
+  type VoiceModeMicrophone,
+  type VoiceModePhase,
+  type VoiceModeRunEvent,
+  type VoiceModeSpeech,
+  type VoiceModeState,
+  type VoiceModeTimer,
+} from "./voiceMode.ts";
