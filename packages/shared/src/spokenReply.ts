@@ -1,10 +1,17 @@
 export const SPOKEN_REPLY_MAX_LENGTH = 400;
 export const SPOKEN_REPLY_REMAINDER = "The rest is on your screen.";
 export const SPOKEN_REPLY_SCREEN_ONLY = "I've put it on your screen.";
+export const SPOKEN_REPLY_INLINE_CODE = "the snippet on your screen";
 
 const FALLBACK_SENTENCE_LIMIT = 3;
+const INLINE_WORD_MAX_LENGTH = 32;
+const INLINE_WORD = /^[\p{L}\p{N}]+(?:[._-][\p{L}\p{N}]+)*$/u;
 const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 const FENCE_MARKER = /^\s*(`{3,}|~{3,})(.*)$/;
+const LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/;
+const ROOTED_PATH =
+  /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2})?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/g;
+const RELATIVE_FILE_PATH = /(?<![\w./\\])[\w.-]+(?:[/\\][\w.-]+)*[/\\][\w-]+(?:\.[\w-]+)+/g;
 
 export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart: boolean } {
   const lines = text.split(/\r\n?|\n/);
@@ -29,11 +36,14 @@ export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart
     if (line.trim() === "---") {
       if (!hasDivider) {
         hasDivider = true;
-        const { spoken } = cleanProse(prose);
+        const { spoken, droppedContent: droppedFromBlurb } = cleanProse(prose);
         if (spoken.length > 0 && spoken.length <= SPOKEN_REPLY_MAX_LENGTH) {
           return {
             blurb: spoken,
-            hasOnScreenPart: lines.slice(index + 1).some((line) => !!line.trim()),
+            hasOnScreenPart:
+              droppedContent ||
+              droppedFromBlurb ||
+              lines.slice(index + 1).some((line) => !!line.trim()),
           };
         }
       }
@@ -50,8 +60,22 @@ export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart
 function cleanProse(lines: string[]) {
   const prose: string[] = [];
   let inTable = false;
+  let inIndentedCode = false;
+  let listIndent = 0;
   let droppedContent = false;
   for (const [index, line] of lines.entries()) {
+    if (line.trim()) {
+      const indent = /^[ \t]*/.exec(line)?.[0].replace(/\t/g, "    ").length ?? 0;
+      if (indent < listIndent) listIndent = 0;
+      inIndentedCode =
+        listIndent === 0 && indent >= 4 && (inIndentedCode || !lines[index - 1]?.trim());
+      if (inIndentedCode) {
+        droppedContent = true;
+        continue;
+      }
+      const listMarker = LIST_MARKER.exec(line)?.[0];
+      if (listMarker) listIndent = listMarker.replace(/\t/g, "    ").length;
+    }
     const nextLine = lines[index + 1] ?? "";
     if (line.trim() && nextLine.includes("|") && TABLE_DELIMITER.test(nextLine)) {
       inTable = true;
@@ -67,21 +91,38 @@ function cleanProse(lines: string[]) {
     droppedContent = true;
     return "";
   };
+  const keepLinkLabel = (_match: string, image: string, label: string) => {
+    droppedContent = true;
+    return image ? "" : label;
+  };
   const spoken = prose
     .join("\n")
-    .replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, drop)
-    .replace(
-      /(!?)\[([^\]\n]*)\]\((?:[^()\n]|\([^()\n]*\))*\)/g,
-      (_match, image: string, label: string) => {
-        droppedContent = true;
-        return image ? "" : label;
-      },
-    )
-    .replace(/^\s{0,3}#{1,6}(?:[ \t]+|$)/gm, "")
+    .replace(/(?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`)/g, (_match, _marker: string, code: string) => {
+      if (code.length <= INLINE_WORD_MAX_LENGTH && INLINE_WORD.test(code)) {
+        return code;
+      }
+      droppedContent = true;
+      return SPOKEN_REPLY_INLINE_CODE;
+    })
+    .replace(/^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*\S[^\n]*$/gm, drop)
+    .replace(/(!?)\[([^\]\n]*)\]\((?:[^()\n]|\([^()\n]*\))*\)/g, keepLinkLabel)
+    .replace(/(!?)\[([^\]\n]+)\]\[[^\]\n]*\]/g, keepLinkLabel)
+    .replace(/<(?:https?|ftp|mailto):[^>\s]+>/gi, drop)
+    .replace(/\b(?:https?|ftp):\/\/[^\s<>"']+/gi, (url) => {
+      droppedContent = true;
+      return /[.,!?;:]+$/.exec(url)?.[0] ?? "";
+    })
+    .replace(/<\/?[A-Za-z][\w-]*(?=[\s/>])[^>]*>/g, "")
+    .replace(ROOTED_PATH, drop)
+    .replace(RELATIVE_FILE_PATH, drop)
+    .replace(/^[ \t]{0,3}(?:>[ \t]?)+/gm, "")
+    .replace(/^[ \t]*(?:=+|-+|([*_-])(?:[ \t]*\1){2,})[ \t]*$/gm, "")
+    .replace(/^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/gm, "")
     .replace(/[ \t]+#+[ \t]*$/gm, "")
-    .replace(/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/gm, "")
-    .replace(/(\*{1,3})(\S(?:.*?\S)?)\1|(?<!\w)(_{1,3})(\S(?:.*?\S)?)\3(?!\w)/g, "$2$4")
+    .replace(/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\](?:[ \t]+|$))?/gm, "")
     .replace(/\s+/g, " ")
+    .replace(/(\*{1,3})(\S(?:.*?\S)?)\1|(?<!\w)(_{1,3})(\S(?:.*?\S)?)\3(?!\w)/g, "$2$4")
+    .replace(/~~(\S(?:.*?\S)?)~~/g, "$1")
     .replace(/([:;]) +[.!?](?= |$)/g, "$1")
     .replace(/ +([,.!?])/g, "$1")
     .trim();
