@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { APP_FORK_BRAND } from "../../branding";
 import { T3Wordmark } from "../T3Wordmark";
 
 export function StandalonePage({ children }: { readonly children: ReactNode }) {
@@ -23,11 +24,15 @@ export function StandalonePageHeader({
   return (
     <>
       <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
-        <span className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
-          <T3Wordmark className="h-3 w-auto shrink-0 text-foreground" aria-hidden />
-          {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
-          <span className="text-lg font-medium tracking-tight">Code</span>
-        </span>
+        {APP_FORK_BRAND ? (
+          <span className="text-lg font-medium tracking-tight">{APP_FORK_BRAND.name}</span>
+        ) : (
+          <span className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
+            <T3Wordmark className="h-3 w-auto shrink-0 text-foreground" aria-hidden />
+            {/* oxlint-disable-next-line t3code/no-untranslated-copy -- product wordmark */}
+            <span className="text-lg font-medium tracking-tight">Code</span>
+          </span>
+        )}
         {context ? <span className="text-sm">{context}</span> : null}
       </div>
       <h1 className="mt-6 text-xl leading-tight font-semibold">{title}</h1>

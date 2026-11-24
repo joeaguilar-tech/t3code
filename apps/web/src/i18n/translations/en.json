@@ -10284,6 +10284,7 @@
   "8f0f33564b6f67d3": "Inspect processes, resource use, and logs on this environment.",
   "414e240899c5f148": "Inspect processes, resource use, and logs on one environment at a time.",
   "6ebd73c7bfb58bb7": "App",
+  "c6da108bd002d3cf": "{forkNotice}",
   "6939d310de8dfe5b": "Organization",
   "c424bee294b9f778": "This environment is managed by {organization}. Some settings and features follow its policy.",
   "82d9538af590f58c": "See your agents, import projects, and set up your phone.",

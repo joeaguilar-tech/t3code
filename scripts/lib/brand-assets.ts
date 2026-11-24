@@ -1,3 +1,5 @@
+import { resolveForkBrand } from "@t3tools/shared/forkBrand";
+
 export const BRAND_ASSET_PATHS = {
   developmentIconComposerProject: "assets/dev/app-icon.icon",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
@@ -91,8 +93,10 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
 export function resolveWebIconOverrides(
   brand: WebAssetBrand,
   targetDirectory: string,
+  forkBrand?: string,
 ): ReadonlyArray<IconOverride> {
-  const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
+  const sourcePaths =
+    resolveForkBrand(forkBrand)?.assets.web ?? WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
   return [
     {
       sourceRelativePath: sourcePaths.faviconIco,

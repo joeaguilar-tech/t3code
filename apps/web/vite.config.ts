@@ -18,14 +18,18 @@ import {
   DEV_PROXIED_PATH_PREFIXES,
 } from "@t3tools/shared/devProxy";
 
+import { resolveForkBrand } from "@t3tools/shared/forkBrand";
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-version";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 import { warmBundledDevPlugin } from "./vite/warmBundledDev";
-import { formatAppDisplayName, resolveWebAppStageLabel } from "./src/branding.logic";
+import { resolveWebBranding } from "./src/branding.logic";
+import { forkWebAssetsPlugin } from "./vite/forkWebAssets";
 
 const repoEnv = loadRepoEnv();
+const brand = repoEnv.T3CODE_BRAND;
+const forkBrand = resolveForkBrand(brand);
 Object.assign(process.env, repoEnv);
 
 // Signal single-origin dev explicitly; loadRepoEnv can restore deleted URL keys from .env.
@@ -282,12 +286,15 @@ function bootstrapTitlePlugin(): Plugin {
       development = !config.isProduction;
     },
     transformIndexHtml(html) {
-      const stageLabel = resolveWebAppStageLabel({
+      const { baseName, displayName } = resolveWebBranding({
+        brand,
         hostedAppChannel: configuredHostedAppChannel,
         development,
       });
-      const title = formatAppDisplayName({ baseName: "T3 Code", stageLabel });
-      return html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+      const titled = html.replace(/<title>[^<]*<\/title>/, `<title>${displayName}</title>`);
+      return forkBrand
+        ? titled.replace(/(id="boot-shell-logo"[^>]* alt=")[^"]*"/, `$1${baseName}"`)
+        : titled;
     },
   };
 }
@@ -320,6 +327,7 @@ export default defineConfig(({ command }) => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       bootstrapTitlePlugin(),
+      forkBrand ? forkWebAssetsPlugin(brand, forkBrand.assets.web) : undefined,
       devCompressionPlugin(),
       chunkCycleGuardPlugin(),
       builtDev
@@ -353,6 +361,7 @@ export default defineConfig(({ command }) => {
       ],
     },
     define: {
+      "import.meta.env.T3CODE_BRAND": JSON.stringify(brand ?? ""),
       "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
       // Override .env URLs with empty values in single-origin dev so clients use window.location.origin.
       "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),

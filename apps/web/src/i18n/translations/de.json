@@ -10275,6 +10275,7 @@
   "8f0f33564b6f67d3": "Prozesse, Ressourcennutzung und Logs in dieser Umgebung untersuchen.",
   "414e240899c5f148": "Prozesse, Ressourcennutzung und Logs jeweils einer Umgebung untersuchen.",
   "6ebd73c7bfb58bb7": "App",
+  "c6da108bd002d3cf": "{forkNotice}",
   "6939d310de8dfe5b": "Organisation",
   "c424bee294b9f778": "Diese Umgebung wird von {organization} verwaltet. Einige Einstellungen und Funktionen folgen deren Richtlinie.",
   "82d9538af590f58c": "Sieh deine Agenten, importiere Projekte und richte dein Smartphone ein.",

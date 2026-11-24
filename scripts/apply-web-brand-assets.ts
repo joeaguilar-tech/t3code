@@ -7,6 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { Argument, Command, Flag } from "effect/cli";
+import { loadRepoEnv } from "./lib/public-config.ts";
 import {
   resolveWebAssetBrandForChannel,
   resolveWebIconOverrides,
@@ -23,13 +24,14 @@ const WEB_ASSET_BRANDS = [
 export const applyWebBrandAssets = Effect.fn("applyWebBrandAssets")(function* (
   brand: WebAssetBrand,
   targetDirectory: string,
+  forkBrand = loadRepoEnv().T3CODE_BRAND,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
 
   yield* Effect.forEach(
-    resolveWebIconOverrides(brand, path.resolve(repoRoot, targetDirectory)),
+    resolveWebIconOverrides(brand, path.resolve(repoRoot, targetDirectory), forkBrand),
     (override) =>
       fs.copyFile(path.join(repoRoot, override.sourceRelativePath), override.targetRelativePath),
     { concurrency: "unbounded" },

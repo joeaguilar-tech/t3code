@@ -36,7 +36,12 @@ import { createModelSelection, pickModelSelection } from "@t3tools/shared/model"
 import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import {
+  APP_FORK_BRAND,
+  APP_VERSION,
+  HOSTED_APP_CHANNEL,
+  HOSTED_APP_CHANNEL_LABEL,
+} from "../../branding";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
@@ -2555,6 +2560,11 @@ export function AboutSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={gt("App")}>
+        {APP_FORK_BRAND ? (
+          <p className="px-3 py-2 text-sm text-muted-foreground">
+            {gt("{forkNotice}", { forkNotice: APP_FORK_BRAND.statement })}
+          </p>
+        ) : null}
         {primaryPolicy ? (
           <SettingsRow
             title={gt("Organization")}

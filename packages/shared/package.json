@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./forkBrand": {
+      "types": "./src/forkBrand.ts",
+      "import": "./src/forkBrand.ts"
+    },
     "./png": {
       "types": "./src/png.ts",
       "import": "./src/png.ts"

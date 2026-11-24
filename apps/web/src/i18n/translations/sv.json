@@ -10282,6 +10282,7 @@
   "8f0f33564b6f67d3": "Granska processer, resursanvändning och loggar i den här miljön.",
   "414e240899c5f148": "Granska processer, resursanvändning och loggar i en miljö i taget.",
   "6ebd73c7bfb58bb7": "App",
+  "c6da108bd002d3cf": "{forkNotice}",
   "6939d310de8dfe5b": "Organisation",
   "c424bee294b9f778": "Miljön hanteras av {organization}. Vissa inställningar och funktioner följer dess policy.",
   "82d9538af590f58c": "Se dina agenter, importera projekt och konfigurera din telefon.",

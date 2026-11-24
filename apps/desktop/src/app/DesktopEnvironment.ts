@@ -18,7 +18,14 @@ import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePat
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
+import { formatForkDisplayName, resolveForkBrand } from "@t3tools/shared/forkBrand";
+
+declare const __T3CODE_BUILD_BRAND__: string;
+const configuredBrand =
+  typeof __T3CODE_BUILD_BRAND__ === "undefined" ? undefined : __T3CODE_BUILD_BRAND__;
+
 export interface MakeDesktopEnvironmentInput {
+  readonly brand?: string;
   readonly dirname: string;
   readonly homeDirectory: string;
   readonly platform: NodeJS.Platform;
@@ -72,6 +79,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly otlpHeaders: Option.Option<Record<string, string>>;
     readonly otlpProtocol: OtlpProtocol;
     readonly branding: DesktopAppBranding;
+    readonly forkBrand?: NonNullable<ReturnType<typeof resolveForkBrand>>;
     readonly displayName: string;
     readonly appUserModelId: string;
     readonly linuxDesktopEntryName: string;
@@ -85,7 +93,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "T3 Code";
+export const APP_BASE_NAME = "T3 Code";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -101,14 +109,16 @@ function resolveDesktopAppStageLabel(input: {
 export function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
+  readonly brand?: string;
 }): DesktopAppBranding {
+  const forkBrand = resolveForkBrand(input.brand ?? configuredBrand);
   const stageLabel = resolveDesktopAppStageLabel(input);
   return {
-    baseName: APP_BASE_NAME,
+    baseName: forkBrand?.name ?? APP_BASE_NAME,
     stageLabel,
-    // Fork: only the visible name changes; setName keeps the stage label for the safeStorage keychain item.
-    displayName:
-      stageLabel === "Beta" ? `${APP_BASE_NAME} (Joe)` : `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: forkBrand
+      ? formatForkDisplayName(forkBrand.name, stageLabel)
+      : `${APP_BASE_NAME} (${stageLabel})`,
   };
 }
 
@@ -169,7 +179,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
+  const forkBrand = resolveForkBrand(input.brand ?? configuredBrand);
   const branding = resolveDesktopAppBranding({
+    ...(input.brand === undefined ? {} : { brand: input.brand }),
     isDevelopment,
     appVersion: input.appVersion,
   });
@@ -228,6 +240,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     otlpHeaders: config.otlpHeaders,
     otlpProtocol: config.otlpProtocol,
     branding,
+    ...(forkBrand ? { forkBrand } : {}),
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
       isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",

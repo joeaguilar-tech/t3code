@@ -10274,6 +10274,7 @@
   "8f0f33564b6f67d3": "Inspectez les processus, l’utilisation des ressources et les journaux de cet environnement.",
   "414e240899c5f148": "Inspectez les processus, l’utilisation des ressources et les journaux d’un environnement à la fois.",
   "6ebd73c7bfb58bb7": "App",
+  "c6da108bd002d3cf": "{forkNotice}",
   "6939d310de8dfe5b": "Organisation",
   "c424bee294b9f778": "Cet environnement est géré par {organization}. Certains paramètres et fonctionnalités suivent sa politique.",
   "82d9538af590f58c": "Voyez vos agents, importez des projets et configurez votre téléphone.",

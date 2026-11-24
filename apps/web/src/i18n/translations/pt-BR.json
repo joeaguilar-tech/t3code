@@ -10274,6 +10274,7 @@
   "8f0f33564b6f67d3": "Inspecione processos, uso de recursos e logs neste ambiente.",
   "414e240899c5f148": "Inspecione processos, uso de recursos e logs em um ambiente por vez.",
   "6ebd73c7bfb58bb7": "App",
+  "c6da108bd002d3cf": "{forkNotice}",
   "6939d310de8dfe5b": "Organização",
   "c424bee294b9f778": "Este ambiente é gerenciado por {organization}. Algumas configurações e recursos seguem a política dela.",
   "82d9538af590f58c": "Veja seus agentes, importe projetos e configure seu celular.",

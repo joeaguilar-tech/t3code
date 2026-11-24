@@ -1,6 +1,8 @@
+import { formatForkDisplayName, resolveForkBrand } from "@t3tools/shared/forkBrand";
+
 const NIGHTLY_SERVER_VERSION_PATTERN = /^[^-+]+-(?:nightly|preview)\.\d{8}\.\d+$/;
 
-export function formatAppDisplayName(input: {
+function formatAppDisplayName(input: {
   readonly baseName: string;
   readonly stageLabel: string;
 }): string {
@@ -17,8 +19,43 @@ export function resolveHostedAppChannelLabel(channel: string | null | undefined)
   return normalized === "nightly" ? "Nightly" : normalized === "latest" ? "Latest" : null;
 }
 
+export function resolveWebBranding(input: {
+  readonly brand: string | undefined;
+  readonly hostedAppChannel: string | null | undefined;
+  readonly development: boolean;
+}) {
+  const forkBrand = resolveForkBrand(input.brand);
+  const baseName = forkBrand?.name ?? "T3 Code";
+  const stageLabel = resolveWebAppStageLabel(input);
+  return {
+    forkBrand,
+    baseName,
+    stageLabel,
+    displayName: forkBrand
+      ? formatForkDisplayName(baseName, stageLabel)
+      : formatAppDisplayName({ baseName, stageLabel }),
+  };
+}
+
+export function formatWebManifest(manifest: string, brand: string | undefined): string {
+  const forkBrand = resolveForkBrand(brand);
+  if (!forkBrand) return manifest;
+
+  return (
+    JSON.stringify(
+      {
+        ...JSON.parse(manifest),
+        name: forkBrand.name,
+        short_name: forkBrand.name,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}
+
 /** Stage label of a web build. vite.config.ts stamps it into index.html's title too. */
-export function resolveWebAppStageLabel(input: {
+function resolveWebAppStageLabel(input: {
   readonly hostedAppChannel: string | null | undefined;
   readonly development: boolean;
 }): string {

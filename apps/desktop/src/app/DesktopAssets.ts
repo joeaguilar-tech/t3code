@@ -79,6 +79,13 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
+  if (environment.forkBrand) {
+    const assets = environment.forkBrand.assets;
+    return environment.path.join(
+      environment.rootDir,
+      ext === "ico" ? assets.windowsIconIco : assets.macIconPng,
+    );
+  }
   const brand = environment.isDevelopment ? "dev" : "prod";
   const fileNames = sourceTreeIconFileNames[brand];
   const fileName =
