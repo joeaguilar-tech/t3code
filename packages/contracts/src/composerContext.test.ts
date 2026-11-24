@@ -180,6 +180,12 @@ describe("ComposerContextRecord", () => {
 });
 
 describe("OrchestrationMessageContext", () => {
+  it("preserves a spoken marker even with no records", () => {
+    const context = { version: 1, records: [] };
+    expect(decodeContext(context)).toEqual(context);
+    expect(decodeContext({ ...context, spoken: true })).toEqual({ ...context, spoken: true });
+  });
+
   it("rejects aggregate context size even when each record is valid", () => {
     const record = {
       ...knownRecords["preview-annotation"],

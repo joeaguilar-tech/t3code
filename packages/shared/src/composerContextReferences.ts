@@ -391,7 +391,23 @@ function formatEnvelopeEntry(
   return `${open}>\n${escapeComposerContextPayloadText(body)}\n</${CONTEXT_ENTRY_TAG}>`;
 }
 
+export const SPOKEN_REPLY_NOTE =
+  "This message was spoken. The first part of your reply will be read aloud. " +
+  "Start with one to three short, plain sentences without code, file paths, lists, or Markdown. " +
+  "If there is more to show, say so in the spoken part, then leave a blank line and put --- alone on the next line. " +
+  "Put any code, paths, and other on-screen details after that divider. " +
+  "If the whole answer fits in the spoken part, omit the divider.";
+
 export function projectComposerContextForProvider(input: {
+  text: string;
+  records: ReadonlyArray<ComposerContextRecord>;
+  spoken?: boolean | undefined;
+}): string {
+  const text = projectComposerContext(input);
+  return input.spoken === true ? `${text}\n\n${SPOKEN_REPLY_NOTE}` : text;
+}
+
+function projectComposerContext(input: {
   text: string;
   records: ReadonlyArray<ComposerContextRecord>;
 }): string {
