@@ -5,10 +5,10 @@
     "types": ["node", "electron"],
     "lib": ["ESNext", "DOM", "esnext.disposable"]
   },
-  "include": ["src", "vite.config.ts", "../../scripts/lib"],
   "files": [
     "../../scripts/fork/brandCopy.ts",
     "../../scripts/fork/brandCopyExtras.ts",
     "../../scripts/fork/brandCopyInventory.ts"
-  ]
+  ],
+  "include": ["src", "vite.config.ts", "../../scripts/lib"]
 }

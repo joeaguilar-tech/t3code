@@ -44,10 +44,6 @@ export const BRAND = {
     ],
     "4410caad205bcac7": ["ICU", '"This link names a pull request T3 Code cannot read."'],
     "6024bfa21d5b2f40": ["ICU", '"This link names a repository T3 Code cannot read."'],
-    "5913ebf4c3738995": [
-      "ICU",
-      '"T3 Code cannot install the relay client automatically on {platform}-{arch}."',
-    ],
     f1db0a234c777a1d: ["ICU", '"Use T3 Code in another app (MCP)"'],
     "0c01f791ecef34ad": ["ICU", '"T3 Code environment"'],
     "9371d8cc390a8a1b": [
@@ -80,11 +76,6 @@ export const BRAND = {
     "33194f3e1b80f838": [
       "JSX",
       '["Get one from Use T3 Code in another app (MCP), Settings → Sharing & access, or"," ",{"t":"code","i":1,"c":"t3 auth pairing create"}," on this machine."]',
-    ],
-    "2eadb8e0944eeee6": ["JSX", '"Keep T3 Code open while the relay client is installed."'],
-    "3683040758069062": [
-      "JSX",
-      '["T3 Code will download and install version"," ",{"i":1,"k":"_gt_value_1","v":"v"}," locally."]',
     ],
     d783af11f0615e84: [
       "JSX",
@@ -312,6 +303,7 @@ export const BRAND = {
     "4410caad205bcac7": ["ICU", '"This link names a pull request T3 Code cannot read."'],
     "6024bfa21d5b2f40": ["ICU", '"This link names a repository T3 Code cannot read."'],
     "30958cbc5d9ac66a": ["ICU", '"T3 Code, Threads"'],
+    b34935e6e057ff8e: ["ICU", '"Update T3 Code to transcribe on an environment."'],
   },
 } as const;
 
@@ -503,6 +495,18 @@ export const KEEP = {
     badde72b8abcf6f1: ["ICU", '"Enable T3 Code SnapShots to start capturing windows."'],
     ccf65aac5ca40975: ["ICU", '"Check T3 Code SnapShots in GNOME Extensions, then try again."'],
     "09b4af0d2181cbbb": ["ICU", '"Drop T3 Code or VS Code .json files"'],
+    // The relay-client install dialog speaks for the selected environment next to kept T3 Connect rows.
+    "5913ebf4c3738995": [
+      "ICU",
+      '"T3 Code cannot install the relay client automatically on {platform}-{arch}."',
+    ],
+    // The relay-client install dialog speaks for the selected environment next to kept T3 Connect rows.
+    "2eadb8e0944eeee6": ["JSX", '"Keep T3 Code open while the relay client is installed."'],
+    // The relay-client install dialog speaks for the selected environment next to kept T3 Connect rows.
+    "3683040758069062": [
+      "JSX",
+      '["T3 Code will download and install version"," ",{"i":1,"k":"_gt_value_1","v":"v"}," locally."]',
+    ],
   },
   desktop: {
     // The suggested npx command installs upstream's CLI.
@@ -579,8 +583,6 @@ export const KEEP = {
     cc0ec193d9b3dff0: ["ICU", '"Update the environment\'s T3 Code server to browse issues."'],
     // The sender may be an upstream T3 Code server.
     f85d094706a8e4a6: ["ICU", '"Sent by T3 Code"'],
-    // The selected environment may run upstream T3 Code.
-    b34935e6e057ff8e: ["ICU", '"Update T3 Code to transcribe on an environment."'],
     "58df920ec2681250": [
       "JSX",
       '"When the app crashes or hits an error, it sends the error message, the stack trace, the app version, and the device model and OS version to the T3 Code team. Each launch also sends startup timings. Reports carry a random ID for this install."',
