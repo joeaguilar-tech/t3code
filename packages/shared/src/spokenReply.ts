@@ -26,7 +26,8 @@ const AUTOLINK = /<[a-z][a-z\d+.-]*:[^>\s]+>/gi;
 const UNSPEAKABLE = "\0";
 const URL_PREFIX = /^(?!localhost:\d+(?:[/?#]|$))(?:[a-z][a-z\d+.-]*:[^\s\\]|www\.)/i;
 const ROOTED_PATH = /^(?:\.{1,2}|~)?\/[^/\s]/;
-const RELATIVE_FILE = /^[a-z_.][\w.-]*\/[\w.-]+\.[A-Za-z][\w-]*(?::\d+)?$/;
+const RELATIVE_FILE =
+  /^[a-z_.][\w.-]*\/[\w.-]+\.[A-Za-z][\w-]*(?::\d+(?:[:-]\d+)?|#L\d+(?:-L\d+)?)?(?:$|[–—…])/;
 const SENTENCE_END = /[.!?。！？]+["'”’)\]]*(?= |$)/g;
 const ABBREVIATION = /\b(?:Mr|Mrs|Ms|Dr|vs|e\.g|i\.e|a\.m|p\.m)$/i;
 const DOTTED_INITIALISM = /\b(?:[A-Z]\.)+[A-Z]$/;
@@ -154,7 +155,8 @@ function cleanProse(lines: string[]) {
     if (
       last &&
       (isListItem || index < blocks.length - 1) &&
-      !/[.:;!?。！？]["'”’)\]]*$/.test(last)
+      !/[.:;!?。！？]["'”’)\]]*$/.test(last) &&
+      !(isListItem && /,["'”’)\]]*$/.test(last))
     ) {
       parts[parts.length - 1] = last + ".";
     }
@@ -191,7 +193,10 @@ function splitProseBlocks(text: string) {
     }
     if (HEADING_MARKER.test(line)) {
       finishBlock();
-      const heading = line.replace(HEADING_MARKER, "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+      const heading = line
+        .replace(HEADING_MARKER, "")
+        .replace(/[ \t]+#+[ \t]*$/, "")
+        .trim();
       if (heading) blocks.push({ lines: [heading], isListItem: false });
       blank = false;
       continue;
@@ -234,7 +239,9 @@ function leadingIndent(line: string) {
 }
 
 function isUnspeakableToken(word: string) {
-  const token = word.replace(/^[("'“‘\[]+|[.,!?:;)"'”’\]]+$/g, "");
+  const token = word
+    .replace(/^[^\p{L}\p{N}_/]+?(?=[\p{L}\p{N}_/]|\.[\p{L}\p{N}_]|\.\.?\/|~\/)/u, "")
+    .replace(/(?<=[\p{L}\p{N}_/])(?:['’]s)?[^\p{L}\p{N}_/]*$/u, "");
   return (
     URL_PREFIX.test(token) ||
     ROOTED_PATH.test(token) ||
@@ -252,10 +259,9 @@ function splitSentences(text: string) {
       const before = text.slice(start, boundary.index);
       const next = text.charAt(end + 1);
       if (
-        /\p{Ll}/u.test(next) ||
+        /[\p{Ll}\p{Nd}]/u.test(next) ||
         DOTTED_INITIALISM.test(before) ||
-        ABBREVIATION.test(before) ||
-        (/\d/.test(next) && /\bapprox$/i.test(before))
+        ABBREVIATION.test(before)
       ) {
         continue;
       }
@@ -288,7 +294,7 @@ function formatReply(kept: string[], hasOnScreenPart: boolean) {
     }
     const lastSpace = content.lastIndexOf(" ", budget);
     excerpt = complete.join(" ") || content.slice(0, lastSpace > 0 ? lastSpace : budget);
-    if (SCREEN_MENTION.test(complete.at(-1) ?? excerpt)) {
+    if (SCREEN_MENTION.test(complete.at(-1) ?? "")) {
       return { blurb: excerpt, hasOnScreenPart: true };
     }
   }
