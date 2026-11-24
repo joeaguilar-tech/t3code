@@ -1,44 +1,30 @@
 const SPOKEN_REPLY_MAX_LENGTH = 400;
 const SPOKEN_REPLY_REMAINDER = "The rest is on your screen.";
-const SPOKEN_REPLY_SCREEN_ONLY = "I've put it on your screen.";
-const SPOKEN_REPLY_INLINE_CODE = "the snippet on your screen";
-const SPOKEN_REPLY_INLINE_CODE_PLURAL = "the snippets on your screen";
-const SPOKEN_REPLY_URL = "a link";
-const SPOKEN_REPLY_PATH = "a file";
+const SPOKEN_REPLY_SCREEN_ONLY = "The answer is on your screen.";
 
 const FALLBACK_SENTENCE_LIMIT = 3;
-const INLINE_WORD_MAX_LENGTH = 32;
-const INLINE_WORD = /^[\p{L}\p{N}]+(?:[._-][\p{L}\p{N}]+)*$/u;
+const INLINE_WORD = /^[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)?$/u;
 const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 const FENCE_MARKER = /^\s*(`{3,}|~{3,})(.*)$/;
 const LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/;
-const ROOTED_PATH =
-  /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2}|\.[\w-][\w.-]*)?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/;
-const RELATIVE_FILE_PATH =
-  /(?<![\w./\\])(?=[a-z_.]|[\w.-]+(?:[/\\][\w.-]+)*[/\\][a-z_])[\w.-]+(?:[/\\][\w.-]+)*[/\\][\w-]+(?:\.[A-Za-z][\w-]*)+/;
-const FILE_PATH = new RegExp(
-  String.raw`(?:\b([Tt]he|[Tt]his|[Tt]hat|[Yy]our|[Aa]n?)\s+)?(?:${ROOTED_PATH.source}|${RELATIVE_FILE_PATH.source})(?:\s+(file|folder)\b(?![./\\-][\w.-]))?`,
+const INLINE_CODE = /(?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`)/g;
+const TAG_ATTRIBUTES = String.raw`(?:\s+(?:[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|\{[^{}]*\}|[^\s"'=<>]+)|disabled|checked|required|readonly|selected|multiple|hidden|autofocus|open|controls|loop|muted|autoplay|async|defer))*`;
+const HTML_BLOCK = new RegExp(
+  String.raw`^[ \t]*<([A-Za-z][\w-]*)${TAG_ATTRIBUTES}\s*(?:\/>|>[\s\S]*?<\/\1\s*>)[ \t]*$`,
+  "gm",
+);
+const INLINE_TAG = new RegExp(
+  String.raw`(?<!\w)<(?:[A-Za-z][\w-]*${TAG_ATTRIBUTES}\s*\/?)?>|<\/(?:[A-Za-z][\w-]*\s*)?>|<(?:br|hr)\s*\/?>`,
   "g",
 );
-const BARE_URL =
-  /(?<![\w./\\@-])(?:(?:https?|ftp):\/\/[^\s<>"']+|(?:[\w-]+(?:\.[\w-]+)*\.(?!(?:js|ts|jsx|tsx|mjs|cjs|json|md|py|rb|rs|go|sh|css|html|ya?ml|toml|txt)\/)[a-z]{2,}|(?:localhost|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?)\/[^\s<>"']*)/gi;
-const INLINE_FORMATTING_TAG = /^(?:b|i|em|strong|u|s|del|kbd|code|sub|sup|mark|br|span)$/i;
-const INLINE_CODE_RUN = new RegExp(
-  `\\b${SPOKEN_REPLY_INLINE_CODE}(?:(?:,\\s*(?:(?:and|or)\\s+)?|\\s+(?:and|or)\\s+)${SPOKEN_REPLY_INLINE_CODE}\\b)+`,
-  "g",
-);
-
-function urlSuffix(url: string) {
-  let depth = 0;
-  for (let index = 0; index < url.length; index++) {
-    const character = url[index];
-    if (character === "(") depth++;
-    if (character !== ")") continue;
-    if (depth === 0) return url.slice(index);
-    depth--;
-  }
-  return /[.,!?;:]+$/.exec(url)?.[0] ?? "";
-}
+const AUTOLINK = /<(?:[a-z][a-z\d+.-]*:\/\/|mailto:)[^>\s]+>/gi;
+// Keep punctuation inside inline markup out of sentence boundary detection.
+const UNSPEAKABLE = "\0";
+const URL_PREFIX = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.)/i;
+const ROOTED_PATH = /^(?:\.{1,2}|~)?\/[^/\s]/;
+const RELATIVE_FILE = /^[a-z_.][\w.-]*\/[a-z_.][\w.-]*\.[A-Za-z][\w-]*(?::\d+)?$/;
+const SENTENCE_END = /[.!?。！？]+["'”’)\]]*(?= |$)/g;
+const ABBREVIATION = /(?:^|[ (])(?:Mr|Mrs|Ms|Dr|vs|e\.g|i\.e|a\.m|p\.m|etc)$/i;
 
 export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart: boolean } {
   const lines = text.split(/\r\n?|\n/);
@@ -46,6 +32,8 @@ export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart
   let hasDivider = false;
   let fence: string | undefined;
   let droppedContent = false;
+  let inIndentedCode = false;
+  let listIndent = 0;
 
   for (const [index, line] of lines.entries()) {
     const [, marker = "", info = ""] = FENCE_MARKER.exec(line) ?? [];
@@ -60,18 +48,27 @@ export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart
       droppedContent = true;
       continue;
     }
+    if (line.trim()) {
+      const indent = leadingIndent(line);
+      if (indent < listIndent) listIndent = 0;
+      inIndentedCode = indent >= listIndent + 4 && (inIndentedCode || !lines[index - 1]?.trim());
+      if (inIndentedCode) {
+        droppedContent = true;
+        continue;
+      }
+      const listMarker = LIST_MARKER.exec(line)?.[0];
+      if (listMarker) listIndent = listMarker.replace(/\t/g, "    ").length;
+    }
     if (line.trim() === "---") {
       if (!hasDivider) {
         hasDivider = true;
-        const { spoken, droppedContent: droppedFromBlurb } = cleanProse(prose);
-        if (spoken.length > 0 && spoken.length <= SPOKEN_REPLY_MAX_LENGTH) {
-          return {
-            blurb: spoken,
-            hasOnScreenPart:
-              droppedContent ||
-              droppedFromBlurb ||
-              lines.slice(index + 1).some((line) => !!line.trim()),
-          };
+        const cleaned = cleanProse(prose);
+        const removed = droppedContent || cleaned.droppedContent;
+        if ((cleaned.spoken || removed) && cleaned.spoken.length <= SPOKEN_REPLY_MAX_LENGTH) {
+          return formatReply(
+            cleaned.spoken,
+            removed || lines.slice(index + 1).some((line) => !!line.trim()),
+          );
         }
       }
       droppedContent = true;
@@ -87,21 +84,8 @@ export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart
 function cleanProse(lines: string[]) {
   const prose: string[] = [];
   let inTable = false;
-  let inIndentedCode = false;
-  let listIndent = 0;
   let droppedContent = false;
   for (const [index, line] of lines.entries()) {
-    if (line.trim()) {
-      const indent = /^[ \t]*/.exec(line)?.[0].replace(/\t/g, "    ").length ?? 0;
-      if (indent < listIndent) listIndent = 0;
-      inIndentedCode = indent >= listIndent + 4 && (inIndentedCode || !lines[index - 1]?.trim());
-      if (inIndentedCode) {
-        droppedContent = true;
-        continue;
-      }
-      const listMarker = LIST_MARKER.exec(line)?.[0];
-      if (listMarker) listIndent = listMarker.replace(/\t/g, "    ").length;
-    }
     const nextLine = lines[index + 1] ?? "";
     if (line.trim() && nextLine.includes("|") && TABLE_DELIMITER.test(nextLine)) {
       inTable = true;
@@ -117,79 +101,139 @@ function cleanProse(lines: string[]) {
     droppedContent = true;
     return "";
   };
-  const keepLinkLabel = (_match: string, image: string, label: string) => {
+  const keepLinkLabel = (_match: string, label: string) => {
     droppedContent = true;
-    return image ? "" : label;
+    return label;
   };
-  const replaceUrl = (suffix = "") => {
-    droppedContent = true;
-    return SPOKEN_REPLY_URL + suffix;
-  };
-  const replacePath = (_match: string, determiner?: string, label?: string) => {
-    droppedContent = true;
-    if (!determiner && !label) return SPOKEN_REPLY_PATH;
-    const article = determiner?.replace(/n$/, "") ?? "a";
-    return `${article} ${label ?? "file"}`;
-  };
-  const spoken = prose
+  const stripListMarker = (line: string, index: number) =>
+    index > 0 && prose[index - 1]?.trim() && /^\s*(?:19|20)\d{2}\.\s/.test(line)
+      ? line
+      : line.replace(/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\](?:[ \t]+|$))?/, "");
+
+  let removedImage = false;
+  const marked = prose
     .join("\n")
-    .replace(/(?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`)/g, (_match, _marker: string, code: string) => {
-      if (code.length <= INLINE_WORD_MAX_LENGTH && INLINE_WORD.test(code)) {
-        return code;
-      }
-      droppedContent = true;
-      return SPOKEN_REPLY_INLINE_CODE;
+    .replace(/!\[[^\]\n]*\](?:\((?:[^()\n]|\([^()\n]*\))*\)|\[[^\]\n]*\])/g, () => {
+      removedImage = true;
+      return drop();
     })
-    .replace(/^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*\S[^\n]*$/gm, drop)
-    .replace(/(!?)\[([^\]\n]*)\]\((?:[^()\n]|\([^()\n]*\))*\)/g, keepLinkLabel)
-    .replace(/(!?)\[([^\]\n]+)\]\[[^\]\n]*\]/g, keepLinkLabel)
-    .replace(/<(?:https?|ftp|mailto):[^>\s]+>/gi, () => replaceUrl())
-    .replace(BARE_URL, (url) => replaceUrl(urlSuffix(url)))
-    .replace(
-      /(?<!\w)<([A-Za-z][\w-]*)(?:\s+[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))*\s*\/?>|<\/([A-Za-z][\w-]*)\s*>/g,
-      (_match, opening: string | undefined, closing: string | undefined) => {
-        if (INLINE_FORMATTING_TAG.test(opening ?? closing ?? "")) return "";
-        droppedContent = true;
-        return SPOKEN_REPLY_INLINE_CODE;
-      },
+    .replace(HTML_BLOCK, drop)
+    .replace(INLINE_CODE, (_match, _marker: string, code: string) =>
+      INLINE_WORD.test(code) ? code : UNSPEAKABLE,
     )
-    .replace(FILE_PATH, replacePath)
+    .replace(/^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*\S[^\n]*$/gm, drop)
+    .replace(/\[([^\]\n]*)\]\((?:[^()\n]|\([^()\n]*\))*\)/g, keepLinkLabel)
+    .replace(/\[([^\]\n]+)\]\[[^\]\n]*\]/g, keepLinkLabel)
+    .replace(AUTOLINK, UNSPEAKABLE)
+    .replace(INLINE_TAG, UNSPEAKABLE)
     .replace(/^[ \t]{0,3}(?:>[ \t]?)+/gm, "")
     .replace(/^[ \t]*(?:=+|-+|([*_-])(?:[ \t]*\1){2,})[ \t]*$/gm, "")
     .replace(/^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/gm, "")
     .replace(/[ \t]+#+[ \t]*$/gm, "")
-    .replace(/^[ \t]*(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\](?:[ \t]+|$))?/gm, "")
+    .split("\n")
+    .map(stripListMarker)
+    .join(" ")
     .replace(/\s+/g, " ")
-    .replace(INLINE_CODE_RUN, SPOKEN_REPLY_INLINE_CODE_PLURAL)
-    .replace(/(\*{1,3})(\S(?:.*?\S)?)\1|(?<!\w)(_{1,3})(\S(?:.*?\S)?)\3(?!\w)/g, "$2$4")
+    .replace(
+      /(?<!\w)(\*{1,3})(\S(?:.*?\S)?)\1(?!\w)|(?<!\w)(_{1,3})(\S(?:.*?\S)?)\3(?!\w)/g,
+      (
+        match,
+        _stars,
+        starred: string | undefined,
+        _underscores,
+        underscored: string | undefined,
+      ) => (match === "__init__" ? match : (starred ?? underscored ?? match)),
+    )
     .replace(/~~(\S(?:.*?\S)?)~~/g, "$1")
-    .replace(/[,;:]\s*(?:[,;:]\s*)*([.!?]+)(?= |$)/g, "$1")
-    .replace(/([:;]) +[.!?](?= |$)/g, "$1")
-    .replace(/ +([,.!?])(?=\s|$)/g, "$1")
     .trim();
-  return { spoken: /[\p{L}\p{N}]/u.test(spoken) ? spoken : "", droppedContent };
+
+  const spoken = splitSentences(marked)
+    .filter((sentence) => {
+      if (!sentence.includes(UNSPEAKABLE) && !sentence.split(" ").some(isUnspeakableToken)) {
+        return true;
+      }
+      droppedContent = true;
+      return false;
+    })
+    .join(" ");
+
+  return {
+    spoken: /[\p{L}\p{N}]/u.test(spoken)
+      ? removedImage
+        ? spoken.replace(/[:,;](?:\s*[:,;])*\s*([.!?]+)(?= |$)/g, "$1")
+        : spoken
+      : "",
+    droppedContent,
+  };
+}
+
+function leadingIndent(line: string) {
+  return /^[ \t]*/.exec(line)?.[0].replace(/\t/g, "    ").length ?? 0;
+}
+
+function isUnspeakableToken(word: string) {
+  const token = word.replace(/^[("'“‘\[]+|[.,!?;)"'”’\]]+$/g, "");
+  return (
+    URL_PREFIX.test(token) ||
+    ROOTED_PATH.test(token) ||
+    token.indexOf("/") !== token.lastIndexOf("/") ||
+    RELATIVE_FILE.test(token)
+  );
+}
+
+function splitSentences(text: string) {
+  const sentences: string[] = [];
+  let start = 0;
+  for (const boundary of text.matchAll(SENTENCE_END)) {
+    const end = boundary.index + boundary[0].length;
+    if (
+      end < text.length &&
+      boundary[0] === "." &&
+      ABBREVIATION.test(text.slice(start, boundary.index))
+    ) {
+      continue;
+    }
+    sentences.push(text.slice(start, end).trim());
+    start = end + 1;
+  }
+  if (start < text.length) sentences.push(text.slice(start));
+  return sentences;
+}
+
+function formatReply(spoken: string, hasOnScreenPart: boolean) {
+  if (!spoken) return { blurb: SPOKEN_REPLY_SCREEN_ONLY, hasOnScreenPart: true };
+  if (!hasOnScreenPart) return { blurb: spoken, hasOnScreenPart: false };
+
+  const sentences = splitSentences(spoken).filter(
+    (sentence) => sentence !== SPOKEN_REPLY_REMAINDER,
+  );
+  const content = sentences.join(" ");
+  const budget = SPOKEN_REPLY_MAX_LENGTH - SPOKEN_REPLY_REMAINDER.length - 1;
+  let excerpt = content;
+  if (content.length > budget) {
+    const complete = [];
+    let length = 0;
+    for (const sentence of sentences) {
+      length += sentence.length + Number(complete.length > 0);
+      if (length > budget) break;
+      complete.push(sentence);
+    }
+    const lastSpace = content.lastIndexOf(" ", budget);
+    excerpt = complete.join(" ") || content.slice(0, lastSpace > 0 ? lastSpace : budget);
+  }
+  return {
+    blurb: excerpt ? `${excerpt} ${SPOKEN_REPLY_REMAINDER}` : SPOKEN_REPLY_REMAINDER,
+    hasOnScreenPart: true,
+  };
 }
 
 function fallbackReply(spoken: string, droppedContent: boolean) {
-  if (!spoken) return { blurb: SPOKEN_REPLY_SCREEN_ONLY, hasOnScreenPart: true };
-
-  const sentenceEnds: number[] = [];
-  for (const boundary of spoken.matchAll(/[.!?。！？]+["'”’)]*(?= |$)/g)) {
-    sentenceEnds.push(boundary.index + boundary[0].length);
-    if (sentenceEnds.length === FALLBACK_SENTENCE_LIMIT) break;
-  }
-
-  const end = sentenceEnds[FALLBACK_SENTENCE_LIMIT - 1] ?? spoken.length;
-  if (!droppedContent && end === spoken.length && end <= SPOKEN_REPLY_MAX_LENGTH) {
-    return { blurb: spoken, hasOnScreenPart: false };
-  }
-
-  const budget = SPOKEN_REPLY_MAX_LENGTH - SPOKEN_REPLY_REMAINDER.length - 1;
-  let excerpt = spoken.slice(0, end);
-  if (excerpt.length > budget) {
-    const completeSentence = sentenceEnds.filter((end) => end <= budget).at(-1);
-    const lastSpace = spoken.lastIndexOf(" ", budget);
-    excerpt = spoken.slice(0, completeSentence ?? (lastSpace > 0 ? lastSpace : budget));
-  }
-  return { blurb: `${excerpt} ${SPOKEN_REPLY_REMAINDER}`, hasOnScreenPart: true };
+  const sentences = splitSentences(spoken);
+  const excerpt = sentences.slice(0, FALLBACK_SENTENCE_LIMIT).join(" ");
+  return formatReply(
+    excerpt,
+    droppedContent ||
+      sentences.length > FALLBACK_SENTENCE_LIMIT ||
+      spoken.length > SPOKEN_REPLY_MAX_LENGTH,
+  );
 }
