@@ -278,6 +278,137 @@ describe("VoiceModeController", () => {
     expect(h.microphone.cancel).not.toHaveBeenCalled();
   });
 
+  it.each(["empty transcript", "cancel"])(
+    "mutes a post-reply window after speech activity ends with %s",
+    async (ending) => {
+      const h = setup();
+      await h.say("first");
+      await h.finish("id:first");
+      h.controller.noteSpeechActivity();
+
+      if (ending === "cancel") h.controller.cancelTurn();
+      else await h.say("");
+
+      expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+      expect(h.controller.currentState).toMatchObject({ phase: "muted", microphoneOpen: false });
+      expect(h.timers.size).toBe(0);
+    },
+  );
+
+  it("sends a heard utterance whose transcript arrives after the reply without tap-to-send", async () => {
+    const h = setup(false);
+    await h.say("first");
+    await h.running();
+    const transcript = h.currentTranscript();
+    h.controller.noteSpeechActivity();
+    const finished = h.finish("id:first");
+
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    expect(h.microphone.cancel).not.toHaveBeenCalled();
+    await transcript?.("follow-up");
+    await finished;
+    expect(h.send).toHaveBeenLastCalledWith("follow-up");
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+  });
+
+  it.each(["speech activity", "tap-to-send"])(
+    "releases a held reply on timeout after %s",
+    async (activity) => {
+      const h = setup(false);
+      await h.say("first");
+      const transcript = h.currentTranscript();
+      if (activity === "speech activity") h.controller.noteSpeechActivity();
+      else h.controller.tapToSend();
+      const finished = h.finish("id:first");
+      h.microphone.cancel.mockClear();
+
+      await h.elapse(15_000);
+      expect(h.microphone.cancel).toHaveBeenCalledOnce();
+      await finished;
+      expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+      await transcript?.("too late");
+      expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+      expect(h.controller.currentState.microphoneOpen).toBe(true);
+    },
+  );
+
+  it("reports the microphone closed when manually muted during transcription", async () => {
+    const h = setup();
+    h.controller.tapToSend();
+    h.controller.toggleMute();
+
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+    expect(h.microphone.cancel).not.toHaveBeenCalled();
+    await h.say("first");
+    expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+  });
+
+  it.each(["older settles first", "newer settles first"])(
+    "follows the earlier successful send when the newer one rejects and the %s",
+    async (order) => {
+      const h = setup(false);
+      const first = Promise.withResolvers<string>();
+      const second = Promise.withResolvers<string>();
+      h.send.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      const firstSend = h.say("first");
+      const secondSend = h.say("second");
+      if (order === "older settles first") {
+        first.resolve("id:first");
+        await firstSend;
+      }
+      second.reject(new Error("send failed"));
+      await secondSend;
+      if (order === "newer settles first") {
+        first.resolve("id:first");
+        await firstSend;
+      }
+      await h.running();
+      await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+      await h.finish("id:first");
+
+      expect(h.speech.speak.mock.calls).toEqual([
+        ["That message didn't send. Check the screen."],
+        [VOICE_MODE_WORKING_PHRASE],
+        ["spoken: reply"],
+      ]);
+    },
+  );
+
+  it("skips a held needs-user announcement when the run resumes before the transcript", async () => {
+    const h = setup(false);
+    await h.say("first");
+    await h.running();
+    h.controller.tapToSend();
+    const needsUser = h.controller.handleRunEvent({ type: "needs-user" });
+    await h.running();
+    await h.say("follow-up");
+    await needsUser;
+
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    expect(h.controller.currentState).toMatchObject({ phase: "waiting", microphoneOpen: true });
+  });
+
+  it("keeps the microphone closed until a held reply finishes playing", async () => {
+    const h = setup(false);
+    await h.say("first");
+    h.controller.tapToSend();
+    const playback = Promise.withResolvers<void>();
+    const speaking = Promise.withResolvers<void>();
+    h.speech.speak.mockImplementationOnce(() => {
+      speaking.resolve();
+      return playback.promise;
+    });
+    const finished = h.finish("id:first");
+    await h.say("");
+    await speaking.promise;
+
+    expect(h.microphone.open).toHaveBeenCalledTimes(2);
+    expect(h.microphone.cancel).not.toHaveBeenCalled();
+    playback.resolve();
+    await finished;
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+  });
+
   it.each(["speech activity", "tap-to-send"])(
     "skips the working phrase during %s",
     async (activity) => {
