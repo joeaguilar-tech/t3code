@@ -205,6 +205,22 @@ describe("SettingsServerControlsRouteScreen", () => {
     });
   });
 
+  it("lets users turn off holding phone alerts on the selected environment", async () => {
+    act(() => root.render(<SettingsThreadsRouteScreen />));
+
+    const holdAlerts = [...container.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find(
+      (button) => button.textContent === "Hold phone alerts while I'm using this computer",
+    );
+    expect(holdAlerts?.getAttribute("aria-checked")).toBe("true");
+
+    await act(async () => holdAlerts!.click());
+
+    expect(mocks.updateSettings).toHaveBeenCalledExactlyOnceWith({
+      environmentId: "local",
+      input: { patch: { holdPhoneAlertsWhilePresent: false } },
+    });
+  });
+
   it("holds auto-settle changes until a pending project override write settles", async () => {
     mocks.projectSelected = true;
     const pending = Promise.withResolvers<AsyncResult.Success<void>>();
