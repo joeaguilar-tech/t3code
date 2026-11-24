@@ -1,3 +1,5 @@
+import type { VoiceModeController, VoiceModeState } from "@t3tools/client-runtime/voice-input";
+
 const floatingPages = new Set([
   "ThreadAttachment",
   "ThreadFile",
@@ -70,10 +72,22 @@ export function createVoiceModeCover() {
         placement = covers.length > 0 ? "floating" : "inline";
       }
     },
-    control<T extends { microphoneOpen: boolean }>(control: T): T {
-      return captureMuted ? { ...control, microphoneOpen: false } : control;
+    control<T extends Pick<VoiceModeState, "phase" | "microphoneOpen">>(control: T) {
+      return captureMuted
+        ? {
+            ...control,
+            phase: control.phase === "listening" ? ("muted" as const) : control.phase,
+            microphoneOpen: false,
+          }
+        : control;
     },
-    silence(_controller: { currentState: { manuallyMuted: boolean }; toggleMute: () => void }, _stopSpeaking: () => void) {},
+    silence(
+      controller: Pick<VoiceModeController, "currentState" | "toggleMute">,
+      stopSpeaking: () => void,
+    ) {
+      stopSpeaking();
+      if (!controller.currentState.manuallyMuted) controller.toggleMute();
+    },
     unmute() {
       if (placement === "inline" || placement === "floating") captureMuted = false;
     },

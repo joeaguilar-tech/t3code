@@ -8,7 +8,14 @@ import {
 } from "@t3tools/client-runtime/voice-input";
 import { splitSpokenReply } from "@t3tools/shared/spokenReply";
 import { AsyncResult } from "effect/reactivity";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Keyboard, Platform } from "react-native";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAppForeground } from "../../lib/appState";
@@ -17,11 +24,12 @@ import { uuidv4 } from "../../lib/uuid";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { keepScreenAwake, useVoiceInputCapture } from "../voice-input/VoiceInputProvider";
 import { deriveVoiceRunEvents, voiceModeAutoMute, type ThreadVoiceState } from "./threadVoiceMode";
-import { publishFloatingVoiceModeControl } from "./FloatingVoiceModeControl";
 import { createVoiceModeCover } from "./voiceModeCover";
 import { createVoiceModeAudio } from "./voiceModeAudio";
+import { voiceModeSessions } from "./voiceModeSessionStore";
 
 type Session = {
+  readonly ownerKey: string;
   readonly threadKey: string;
   readonly controller: VoiceModeController;
   readonly dispose: () => void;
@@ -38,6 +46,7 @@ export function useVoiceMode(input: {
   readonly sendSpokenMessage: (text: string) => Promise<string>;
 }) {
   const route = useRoute();
+  const liveOwner = useSyncExternalStore(voiceModeSessions.subscribe, voiceModeSessions.getOwner);
   const voiceInput = useVoiceInputCapture();
   const foreground = useAppForeground();
   const preferences = useAtomValue(mobilePreferencesAtom);
@@ -58,7 +67,7 @@ export function useVoiceMode(input: {
     if (!session) return;
     active.current = null;
     session.dispose();
-    publishFloatingVoiceModeControl(null);
+    voiceModeSessions.release(session.ownerKey);
     setView(null);
   }, []);
 
@@ -82,6 +91,7 @@ export function useVoiceMode(input: {
   }, [runs, messages, needsUser]);
 
   const available =
+    liveOwner === null &&
     Platform.OS === "ios" &&
     input.enabled &&
     threadKey !== null &&
@@ -111,9 +121,10 @@ export function useVoiceMode(input: {
     };
     updateCover();
     if (cover.placement !== "inline") return;
+    const ownerKey = `voice-mode:${uuidv4()}`;
+    if (!voiceModeSessions.acquire(ownerKey)) return;
     Keyboard.dismiss();
     const thread = { runs, messages, needsUser };
-    const ownerKey = `voice-mode:${uuidv4()}`;
     const audio = createVoiceModeAudio({
       session: voiceInput.session,
       ownerKey,
@@ -173,13 +184,10 @@ export function useVoiceMode(input: {
     const publish = () => {
       const state = cover.control(controller.currentState);
       setView({ state, placement: cover.placement });
-      publishFloatingVoiceModeControl(
+      voiceModeSessions.publish(
+        ownerKey,
         cover.placement === "floating"
-          ? cover.control({
-              microphoneOpen: controller.currentState.microphoneOpen,
-              toggleMute,
-              end,
-            })
+          ? { microphoneOpen: state.microphoneOpen, toggleMute, end }
           : null,
       );
     };
@@ -192,16 +200,12 @@ export function useVoiceMode(input: {
         end();
         return;
       }
-      if (cover.speechSuppressed) {
-        // Discard an in-flight capture before a native cover can hide the controls.
-        audio.speech.stopSpeaking();
-        controller.cancelTurn();
-        if (controller.currentState.microphoneOpen) controller.toggleMute();
-      }
+      if (cover.speechSuppressed) cover.silence(controller, audio.speech.stopSpeaking);
       publish();
     });
     voiceInput.session.setOwnerFocused(ownerKey, true);
     active.current = {
+      ownerKey,
       threadKey,
       controller,
       previous: thread,

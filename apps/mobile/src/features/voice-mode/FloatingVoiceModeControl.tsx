@@ -5,32 +5,10 @@ import { FullWindowOverlay } from "react-native-screens";
 import { ComposerActionButton } from "../../components/ComposerToolbar";
 import { VoiceModeMuteButton } from "./ThreadVoiceModeToolbar";
 
-type Control = {
-  readonly microphoneOpen: boolean;
-  readonly toggleMute: () => void;
-  readonly end: () => void;
-};
-
-let floatingControl: Control | null = null;
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-function getSnapshot() {
-  return floatingControl;
-}
-
-export function publishFloatingVoiceModeControl(control: Control | null) {
-  if (floatingControl === control) return;
-  floatingControl = control;
-  for (const listener of listeners) listener();
-}
+import { voiceModeSessions } from "./voiceModeSessionStore";
 
 export function FloatingVoiceModeControl() {
-  const control = useSyncExternalStore(subscribe, getSnapshot);
+  const control = useSyncExternalStore(voiceModeSessions.subscribe, voiceModeSessions.getControl);
   const insets = useSafeAreaInsets();
   if (!control) return null;
   return (

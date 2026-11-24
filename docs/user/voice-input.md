@@ -166,4 +166,4 @@ On an iPhone running your own build of T3 Code, open a thread and tap the wavefo
 
 Auto-mute is on by default. The microphone mutes while the agent works and opens briefly after the reply. Tap the microphone to mute or unmute it yourself, or change **Auto-mute** in **Settings → Voice**. Respond to approvals and questions on screen.
 
-Tap the stop button to end voice mode. Leaving the thread or putting the app in the background also ends the session. When you open a file or attachment, the edge controls let you mute the microphone or end the session. In sheets such as the thread queue, the app mutes the microphone and stays silent. Back in the thread, tap the microphone to listen again.
+Tap the stop button to end voice mode. Leaving the thread or putting the app in the background also ends the session. When you open a file or attachment, the edge controls let you mute the microphone or end the session. In sheets such as the thread queue, the app mutes the microphone and stays silent. Messages you finished before opening the sheet still send. Opening a sheet while you’re speaking discards that recording. Back in the thread, tap the microphone to listen again.
