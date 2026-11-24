@@ -18,6 +18,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { isSlashCommandMessage } from "./CommandPolicy.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -458,7 +459,7 @@ export const layer: Layer.Layer<
                 text: projectComposerContextForProvider({
                   text: message.text,
                   records: message.context?.records ?? [],
-                  spoken: message.context?.spoken,
+                  spoken: message.context?.spoken === true && !isSlashCommandMessage(message),
                 }),
                 attachments: message.attachments,
                 createdBy: message.createdBy,
