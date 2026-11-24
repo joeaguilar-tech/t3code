@@ -17,6 +17,7 @@ const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE
 export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
+  readonly onMeteringSample?: (level: number) => void;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
 };
