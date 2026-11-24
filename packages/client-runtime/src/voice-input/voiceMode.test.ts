@@ -14,16 +14,30 @@ import {
 } from "./index.ts";
 
 function setup(autoMute = true) {
+  let capturing = false;
   let heardSpeech = false;
   const violations = new Map<unknown, Set<string>>();
   let transcript: Parameters<VoiceModeMicrophone["open"]>[0] | undefined;
   const microphone = {
     open: vi.fn<VoiceModeMicrophone["open"]>((callback) => {
+      expect.soft(controller["run"], "capture opened during needs-user").not.toBe("paused");
+      expect.soft(controller["playback"], "capture opened during playback").toBeUndefined();
+      expect.soft(controller["manuallyMuted"], "capture opened while manually muted").toBe(false);
+      capturing = true;
       heardSpeech = false;
-      transcript = (text) => step(() => callback(text));
+      const receive = (text: string) =>
+        step(() => {
+          if (transcript === receive) capturing = false;
+          return callback(text);
+        });
+      transcript = receive;
     }),
-    cancel: vi.fn(),
-    finish: vi.fn(),
+    cancel: vi.fn(() => {
+      capturing = false;
+    }),
+    finish: vi.fn(() => {
+      capturing = false;
+    }),
   };
   const speech = {
     speak: vi.fn(async (_text: string) => {}),
@@ -46,7 +60,6 @@ function setup(autoMute = true) {
   });
   function checkMicrophone() {
     const state = controller.currentState;
-    if (!state.microphoneOpen) return;
 
     function require(condition: boolean, reason: string) {
       if (condition) return;
@@ -57,16 +70,16 @@ function setup(autoMute = true) {
       expect.soft(condition, reason).toBe(true);
     }
 
-    require(!state.manuallyMuted, "microphone open while manually muted");
-    require(controller["run"] !== "paused", "microphone open during needs-user");
-    require(!controller["playback"], "microphone open during playback");
-    require(controller["speechQueue"].length === 0, "microphone open with speech queued");
-    if (!autoMute) return;
-
-    const scheduled = [...timers.values()];
-    require(scheduled.includes(VOICE_MODE_LISTEN_WINDOW_MS) ||
-      heardSpeech ||
-      scheduled.includes(15_000), "auto-mute microphone open with no timer or speech activity");
+    require(state.microphoneOpen ===
+      capturing, `snapshot disagrees with capture (capturing: ${capturing})`);
+    if (!capturing) return;
+    require(!controller["playback"], "capturing during playback");
+    require(!state.manuallyMuted, "capturing while manually muted");
+    if (autoMute && !heardSpeech) {
+      require([...timers.values()].includes(
+        VOICE_MODE_LISTEN_WINDOW_MS,
+      ), "silent auto-mute capture has no listen timer");
+    }
   }
 
   function step<T>(action: () => T): T {
@@ -89,15 +102,25 @@ function setup(autoMute = true) {
       step(() => controller.handleRunEvent(event)),
     interrupt: () => step(() => controller.interrupt()),
     noteSpeechActivity: () => {
-      if (controller["microphoneWindow"]) heardSpeech = true;
+      if (capturing) heardSpeech = true;
       step(() => controller.noteSpeechActivity());
     },
     tapToSend: () => step(() => controller.tapToSend()),
-    toggleMute: () => step(() => controller.toggleMute()),
+    toggleMute: () =>
+      step(() => {
+        const { phase, microphoneOpen } = controller.currentState;
+        controller.toggleMute();
+        if (phase !== "idle" && phase !== "ended") {
+          expect
+            .soft(controller.currentState.manuallyMuted, "mute control disagrees with snapshot")
+            .toBe(microphoneOpen);
+        }
+      }),
   };
   return {
     controller: controls,
     microphone,
+    isCapturing: () => capturing,
     speech,
     send,
     timers,
@@ -404,6 +427,39 @@ describe("VoiceModeController", () => {
     },
   );
 
+  it.each(["reply", "needs-user", "failure"] as const)(
+    "reports live follow-up capture while holding %s and discards it on mute",
+    async (event) => {
+      const h = setup();
+      await h.say("first");
+      await h.running();
+      h.controller.toggleMute();
+      h.controller.noteSpeechActivity();
+      const transcript = h.currentTranscript();
+      const notification =
+        event === "reply"
+          ? h.finish("id:first")
+          : event === "needs-user"
+            ? h.controller.handleRunEvent({ type: "needs-user" })
+            : h.fail("id:first");
+
+      expect.soft(h.controller.currentState.microphoneOpen).toBe(true);
+      expect(h.isCapturing()).toBe(true);
+      expect(h.speech.speak).not.toHaveBeenCalled();
+      h.controller.toggleMute();
+
+      expect(h.controller.currentState).toMatchObject({
+        manuallyMuted: true,
+        microphoneOpen: false,
+      });
+      expect(h.isCapturing()).toBe(false);
+      await notification;
+      await transcript?.("discarded");
+      expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+      expect(h.speech.speak).toHaveBeenCalledOnce();
+    },
+  );
+
   it("sends a heard utterance whose transcript arrives after the reply without tap-to-send", async () => {
     const h = setup(false);
     await h.say("first");
@@ -461,12 +517,16 @@ describe("VoiceModeController", () => {
     expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
   });
 
-  it("reports the microphone closed when manually muted during transcription", async () => {
+  it("treats a mute-control tap during transcription as an unmute", async () => {
     const h = setup();
     h.controller.tapToSend();
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
     h.controller.toggleMute();
 
-    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+    expect(h.controller.currentState).toMatchObject({
+      manuallyMuted: false,
+      microphoneOpen: false,
+    });
     expect(h.microphone.cancel).not.toHaveBeenCalled();
     await h.say("first");
     expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
