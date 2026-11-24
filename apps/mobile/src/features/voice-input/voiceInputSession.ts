@@ -10,11 +10,13 @@ import {
   type VoiceRecorderStatus,
 } from "@t3tools/client-runtime/voice-input";
 
+import { m } from "../../i18n/messages";
 import {
   normalizeVoiceInputDecibels,
   VOICE_METERING_INTERVAL_MS,
   VOICE_WAVEFORM_SAMPLE_COUNT,
 } from "./voiceInputMetering";
+
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0);
 
@@ -102,6 +104,7 @@ export class VoiceInputSession {
   constructor(dependencies: VoiceInputSessionDependencies) {
     this.dependencies = dependencies;
     this.controller = new VoiceInputController({
+      resolve: m,
       ...dependencies,
       configureRecording: () =>
         dependencies.configureRecording(

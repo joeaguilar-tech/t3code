@@ -158,7 +158,7 @@ describe("global voice input", () => {
         configureRecording: async () => {
           recording = acquireAudioSession("recording");
           try {
-            await activateAudioSession(recording);
+            await activateAudioSession(recording, { allowBluetoothRecording: false });
           } catch (error) {
             await releaseAudioSession(recording);
             throw error;
@@ -170,6 +170,9 @@ describe("global voice input", () => {
         audio.setActive.mockRejectedValueOnce(new Error("Audio activation failed"));
       }
       await session.start(createVoiceInputTarget("first", () => "", vi.fn(), { start: 0, end: 0 }));
+      expect(audio.setMode).toHaveBeenCalledWith(
+        expect.objectContaining({ allowsRecording: true, allowBluetoothRecording: false }),
+      );
       expect(pause).toHaveBeenCalledOnce();
       expect(isAudioSessionOwner(playback)).toBe(false);
       if (outcome === "complete") {
@@ -193,6 +196,9 @@ describe("global voice input", () => {
       expect(isAudioSessionOwner(recording)).toBe(false);
       const replay = acquireAudioSession("playback");
       expect(await activateAudioSession(replay)).toBe(true);
+      expect(audio.setMode).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ allowBluetoothRecording: false }),
+      );
       expect(audio.setActive).toHaveBeenLastCalledWith(true);
       await releaseAudioSession(replay);
       vi.clearAllMocks();

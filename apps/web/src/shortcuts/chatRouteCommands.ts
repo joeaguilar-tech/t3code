@@ -4,8 +4,10 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
+import { msg } from "gt-react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { m } from "~/i18n/messages";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -16,6 +18,7 @@ import {
   filterToEnvironment,
 } from "../components/Sidebar.environment";
 import { readSidebarEnvironmentId } from "../hooks/useSidebarEnvironmentScope";
+import { isBrowserSurfaceFocused } from "../lib/previewFocus";
 import { shouldCreateNewThreadInCurrentProject } from "../components/Sidebar.logic";
 import {
   createNewThreadHandler,
@@ -98,6 +101,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         lastUsedProjectKey,
         appAtomRegistry.get(defaultProjectFallbackReadyAtom(lastUsedProjectKey)),
         readSidebarEnvironmentId(),
+        selectProjectGroupingSettings(getClientSettings()),
       ),
       handleNewThread,
     };
@@ -136,6 +140,13 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       claim(event);
       const environmentId = readRouteEnvironmentId();
       if (environmentId && canOperatePreview(environmentId)) dispatchPreviewAction(action);
+    };
+  // Unclaimed, zoom keys reach the desktop menu accelerators or the browser's own zoom.
+  const zoomCommand =
+    (action: PreviewAction): CommandHandler =>
+    (event) => {
+      if (!isBrowserSurfaceFocused()) return false;
+      previewCommand(action)(event);
     };
 
   // Fork-only filter commands follow the same catalog order as the sidebar menu.
@@ -195,8 +206,8 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
           toastManager.add(
             stackedThreadToast({
               type: "info",
-              title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              title: m(msg("Preview is desktop-only")),
+              description: m(msg("Open T3 Code in the desktop app to use the in-app preview.")),
             }),
           );
           return;
@@ -205,10 +216,16 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       },
       "preview.refresh": previewCommand("refresh"),
       "preview.focusUrl": previewCommand("focus-url"),
-      "preview.zoomIn": previewCommand("zoom-in"),
-      "preview.zoomOut": previewCommand("zoom-out"),
-      "preview.resetZoom": previewCommand("reset-zoom"),
-      "preview.find": previewCommand("find"),
+      "preview.zoomIn": zoomCommand("zoom-in"),
+      "preview.zoomOut": zoomCommand("zoom-out"),
+      "preview.resetZoom": zoomCommand("reset-zoom"),
+      // Unclaimed, the browser's own find runs when no thread handles panel find.
+      "preview.find": (event) => {
+        const environmentId = readRouteEnvironmentId();
+        if (!environmentId || !canOperatePreview(environmentId)) return false;
+        claim(event);
+        dispatchPreviewAction("find");
+      },
     },
     {
       when: () =>
