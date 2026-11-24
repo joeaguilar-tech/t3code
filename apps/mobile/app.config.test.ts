@@ -1,3 +1,4 @@
+import type { ExpoConfig } from "expo/config";
 import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
@@ -6,16 +7,17 @@ import assetLinks from "../web/public/.well-known/assetlinks.json";
 
 // Keep config parsing independent of local env files and build credentials.
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
+  loadRepoEnv: () => process.env,
 }));
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function loadConfig(variant: string | undefined) {
+async function loadConfig(variant: string | undefined, brand?: string) {
   vi.resetModules();
   vi.stubEnv("APP_VARIANT", variant);
+  vi.stubEnv("T3CODE_BRAND", brand);
   return (await import("./app.config.ts")).default;
 }
 
@@ -45,3 +47,165 @@ it.each([
   ]);
   expect(assetLinks.map((link) => link.target.package_name)).toContain(identifier);
 });
+
+function pluginOptions(config: Awaited<ReturnType<typeof loadConfig>>, name: string) {
+  return config.plugins?.find(
+    (plugin): plugin is Extract<NonNullable<ExpoConfig["plugins"]>[number], unknown[]> =>
+      Array.isArray(plugin) && plugin[0] === name,
+  )?.[1];
+}
+
+function art(config: Awaited<ReturnType<typeof loadConfig>>) {
+  return {
+    icon: config.icon,
+    ios: config.ios?.icon,
+    android: config.android?.icon,
+    adaptive: config.android?.adaptiveIcon,
+    splash: pluginOptions(config, "expo-splash-screen"),
+    notifications: pluginOptions(config, "expo-notifications"),
+  };
+}
+
+function identity(config: Awaited<ReturnType<typeof loadConfig>>) {
+  return {
+    name: config.name,
+    slug: config.slug,
+    scheme: config.scheme,
+    version: config.version,
+    runtimeVersion: config.runtimeVersion,
+    bundleIdentifier: config.ios?.bundleIdentifier,
+    appleTeam: config.ios?.appleTeamId,
+    associatedDomains: config.ios?.associatedDomains,
+    keychainGroups: config.ios?.entitlements?.["keychain-access-groups"],
+    sharing: pluginOptions(config, "expo-sharing"),
+    widgets: pluginOptions(config, "expo-widgets"),
+    eas: config.extra?.eas,
+    owner: config.owner,
+    updates: config.updates,
+    androidPackage: config.android?.package,
+  };
+}
+
+function usage(config: Awaited<ReturnType<typeof loadConfig>>) {
+  return {
+    network: config.ios?.infoPlist?.NSLocalNetworkUsageDescription,
+    library: config.ios?.infoPlist?.NSPhotoLibraryAddUsageDescription,
+    audio: pluginOptions(config, "expo-audio")?.microphonePermission,
+    camera: pluginOptions(config, "expo-camera")?.cameraPermission,
+    picker: pluginOptions(config, "expo-image-picker")?.microphonePermission,
+  };
+}
+
+it.each([
+  {
+    variant: "development",
+    name: "T3 Code Dev",
+    icon: "../../assets/dev/blueprint-ios-1024.png",
+    composer: "../../assets/dev/app-icon.icon",
+    background: "./assets/android-icon-background-dev.png",
+    color: "#347FF8",
+    splash: "./assets/android-splash-icon-dev.png",
+    tint: "#00639B",
+  },
+  {
+    variant: "preview",
+    name: "T3 Code Preview",
+    icon: "../../assets/nightly/nightly-ios-1024.png",
+    composer: "../../assets/nightly/app-icon.icon",
+    background: "./assets/android-icon-background-nightly.png",
+    color: "#111533",
+    splash: "./assets/android-splash-icon-nightly.png",
+    tint: "#7565C7",
+  },
+  {
+    variant: "production",
+    name: "T3 Code",
+    icon: "../../assets/prod/black-ios-1024.png",
+    composer: "../../assets/prod/app-icon.icon",
+    background: undefined,
+    color: "#000000",
+    splash: "./assets/android-splash-icon-prod.png",
+    tint: "#FFFFFF",
+  },
+])("keeps upstream art and usage strings for $variant", async (expected) => {
+  const config = await loadConfig(expected.variant);
+  expect(config.name).toBe(expected.name);
+  expect(config.extra?.brand).toBeUndefined();
+  expect(art(config)).toEqual({
+    icon: expected.icon,
+    ios: expected.composer,
+    android: expected.icon,
+    adaptive: {
+      backgroundColor: expected.color,
+      backgroundImage: expected.background,
+      foregroundImage: "./assets/android-icon-foreground.png",
+      monochromeImage: "./assets/android-icon-mark.png",
+    },
+    splash: {
+      image: expected.icon,
+      resizeMode: "contain",
+      backgroundColor: "#ffffff",
+      imageWidth: 220,
+      dark: { image: expected.icon, backgroundColor: "#0a0a0a" },
+      android: { image: expected.splash, imageWidth: 288, dark: { image: expected.splash } },
+    },
+    notifications: {
+      icon: "./assets/android-notification-icon.png",
+      color: expected.tint,
+      mode: expected.variant === "development" ? "development" : "production",
+    },
+  });
+  expect(usage(config)).toEqual({
+    network: "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
+    library: "Allow T3 Code to save images to your photo library.",
+    audio: "Allow T3 Code to use your microphone for voice input.",
+    camera: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+    picker: "Allow T3 Code to use your microphone for voice input.",
+  });
+});
+
+it.each(["development", "preview", "production"])(
+  "brands the $0 art and permissions while preserving mobile identity",
+  async (variant) => {
+    vi.stubEnv("T3CODE_IOS_BUNDLE_ID", "tech.example.mobile");
+    vi.stubEnv("T3CODE_IOS_APPLE_TEAM_ID", "TEAM000001");
+    vi.stubEnv("T3CODE_EAS_PROJECT_ID", "fork-project");
+    vi.stubEnv("T3CODE_EAS_OWNER", "fork-owner");
+    vi.stubEnv("T3CODE_MOBILE_STAGE_LABEL", "Local");
+    const upstream = await loadConfig(variant);
+    const branded = await loadConfig(variant, "j3");
+    const root = "../../assets/fork/j3";
+    const icon = `${root}/icon-1024.png`;
+    const splash = `${root}/android-splash.png`;
+
+    expect(identity(branded)).toEqual(identity(upstream));
+    expect(branded.extra).toMatchObject({ brand: "j3", stageLabel: "Local" });
+    expect(art(branded)).toMatchObject({
+      icon,
+      ios: icon,
+      android: icon,
+      adaptive: {
+        backgroundColor: "#0F5C5C",
+        foregroundImage: `${root}/android-foreground.png`,
+        monochromeImage: `${root}/android-monochrome.png`,
+      },
+      splash: {
+        image: icon,
+        dark: { image: icon },
+        android: { image: splash, dark: { image: splash } },
+      },
+      notifications: { icon: `${root}/android-monochrome.png`, color: "#0F5C5C" },
+    });
+    expect(branded.android?.adaptiveIcon).not.toHaveProperty("backgroundImage");
+    expect(usage(branded)).toEqual({
+      network: "Allow J3 Code to connect to T3 Code servers on your local network or tailnet.",
+      library: "Allow J3 Code to save images to your photo library.",
+      audio: "Allow J3 Code to use your microphone for voice input.",
+      camera: "Allow J3 Code to access your camera so you can scan pairing QR codes.",
+      picker: "Allow J3 Code to use your microphone for voice input.",
+    });
+    expect(branded.ios?.infoPlist?.CFBundleDisplayName).toBe(
+      upstream.ios?.infoPlist?.CFBundleDisplayName,
+    );
+  },
+);
