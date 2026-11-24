@@ -15,6 +15,7 @@ import {
   isImageReferencesOnly,
   parseComposerContextHref,
   projectComposerContextForProvider,
+  SPOKEN_REPLY_NOTE,
   restoreAttachmentOnlyBootstrapPrompt,
   stripAttachmentOnlyBootstrapPrompt,
   threadContextRecord,
@@ -138,7 +139,7 @@ describe("provider projection", () => {
     const spokenPlain = { ...plain, spoken: true };
     const projectedPlain = projectComposerContextForProvider(spokenPlain);
     expect(projectedPlain).toMatch(/^Explain this\n\nThis message was spoken\./);
-    const note = projectedPlain.slice(plain.text.length + 2);
+    expect(projectedPlain).toBe(`${plain.text}\n\n${SPOKEN_REPLY_NOTE}`);
     expect(spokenPlain.text).toBe("Explain this");
 
     const withoutNote = projectComposerContextForProvider(withReference);
@@ -151,7 +152,7 @@ describe("provider projection", () => {
     }
     const spokenWithReference = { ...withReference, spoken: true };
     expect(projectComposerContextForProvider(spokenWithReference)).toBe(
-      `${withoutNote}\n\n${note}`,
+      `${withoutNote}\n\n${SPOKEN_REPLY_NOTE}`,
     );
     expect(spokenWithReference.text).toBe("Explain [the skill](t3-context://v1/skill/ctx_s)");
   });
