@@ -122,6 +122,7 @@ export interface Preferences {
   /** Hardware-keyboard Return behavior in the composer. */
   readonly composerEnterBehavior?: ComposerEnterBehavior;
   readonly followUpBehavior?: FollowUpBehavior;
+  readonly voiceModeAutoMute?: boolean;
   /** The client `language` setting: a locale code or "system". Unset means English. */
   readonly language?: string;
   readonly microphones?: ReadonlyArray<MicrophoneEntry>;
@@ -210,6 +211,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     dismissedDatabaseStorageNotices?: readonly string[];
     composerEnterBehavior?: ComposerEnterBehavior;
     followUpBehavior?: FollowUpBehavior;
+    voiceModeAutoMute?: boolean;
     language?: string;
     microphones?: ReadonlyArray<MicrophoneEntry>;
     projectGroupingEnabled?: boolean;
@@ -315,6 +317,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (parsed.composerEnterBehavior === "send" || parsed.composerEnterBehavior === "newline") {
     preferences.composerEnterBehavior = parsed.composerEnterBehavior;
+  }
+  if (typeof parsed.voiceModeAutoMute === "boolean") {
+    preferences.voiceModeAutoMute = parsed.voiceModeAutoMute;
   }
   if (parsed.followUpBehavior === "queue" || parsed.followUpBehavior === "steer") {
     preferences.followUpBehavior = parsed.followUpBehavior;

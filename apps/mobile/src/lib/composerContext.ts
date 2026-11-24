@@ -246,7 +246,7 @@ export function uploadedComposerContext(
   if (!context) return undefined;
   const ids = new Map(drafts.map((draft, index) => [draft.id, uploaded[index]?.id]));
   return {
-    version: 1,
+    ...context,
     records: context.records.map((record) =>
       "attachmentId" in record
         ? { ...record, attachmentId: ids.get(record.attachmentId) ?? record.attachmentId }

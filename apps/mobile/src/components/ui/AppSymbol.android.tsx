@@ -1,5 +1,7 @@
 import type { Icon } from "@tabler/icons-react-native/types";
 /* Package-root imports eagerly register the entire Tabler icon set in Metro. */
+import IconActivity from "@tabler/icons-react-native/IconActivity";
+import IconMicrophoneOff from "@tabler/icons-react-native/IconMicrophoneOff";
 import IconAdjustmentsHorizontal from "@tabler/icons-react-native/IconAdjustmentsHorizontal";
 import IconAlignLeft from "@tabler/icons-react-native/IconAlignLeft";
 import IconAlertCircle from "@tabler/icons-react-native/IconAlertCircle";
@@ -238,6 +240,8 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   macstudio: IconDeviceDesktop,
   magnifyingglass: IconSearch,
   mic: IconMicrophone,
+  "mic.slash": IconMicrophoneOff,
+  waveform: IconActivity,
   paintbrush: IconPalette,
   pencil: IconPencil,
   "person.crop.circle": IconUserCircle,

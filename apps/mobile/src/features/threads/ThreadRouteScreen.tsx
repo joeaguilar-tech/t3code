@@ -1,3 +1,4 @@
+import { useVoiceMode } from "../voice-mode/useVoiceMode";
 import * as Dialog from "../../components/ui/Dialog";
 import { useRememberThreadProject } from "./useRememberThreadProject";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
@@ -386,6 +387,23 @@ function ThreadRouteContent(
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
+  const needsVoiceModeUser =
+    requests.activePendingApprovals.length > 0 ||
+    requests.activePendingUserInput !== null ||
+    selectedThread?.source.pendingRuntimeRequest != null ||
+    selectedThread?.hasPendingUserInput === true;
+  const voiceMode = useVoiceMode({
+    threadKey: selectedThread
+      ? scopedThreadKey(selectedThread.environmentId, selectedThread.id)
+      : null,
+    enabled:
+      canOperateThread &&
+      (selectedThreadCreation === null || selectedThreadCreation.outcome?.kind === "delivered"),
+    runs: selectedThreadDetail?.runs,
+    messages: selectedThreadDetail?.messages,
+    needsUser: needsVoiceModeUser,
+    sendSpokenMessage: composer.sendSpokenMessage,
+  });
   useThreadStatusAnnouncements({
     threadKey:
       selectedThread === null || isProviderNativeSubagentThread(selectedThread.source)
@@ -1072,6 +1090,7 @@ function ThreadRouteContent(
           queuedRunEdit={composer.queuedRunEdit}
           composerDraftKey={composer.composerDraftKey}
           followUpBehavior={composer.followUpBehavior}
+          voiceMode={voiceMode}
           canSteerActiveTurn={composer.canSteerActiveTurn}
           isSavingQueuedEdit={composer.isSavingQueuedEdit}
           onCancelQueuedRunEdit={composer.cancelQueuedRunEdit}

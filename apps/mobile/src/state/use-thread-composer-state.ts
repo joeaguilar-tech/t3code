@@ -1,3 +1,4 @@
+import { buildSpokenSend } from "../features/voice-mode/threadVoiceMode";
 import { useComposerAttachmentActions } from "./use-composer-attachment-actions";
 import * as Dialog from "../components/ui/Dialog";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
@@ -852,6 +853,35 @@ export function useThreadComposerState(input: {
     return messageId;
   };
 
+  const sendSpokenMessage = async (text: string) => {
+    if (!selectedThreadShell || modelSelection === null || runtimeMode === null) {
+      throw new Error("The thread is unavailable.");
+    }
+    const metadata = makeQueuedMessageMetadata();
+    const messageId = MessageId.make(metadata.messageId);
+    const settingUp = [selectedThreadActivityRun?.status, selectedThreadRuntime?.status].some(
+      (status) => status === "preparing" || status === "starting",
+    );
+    await enqueueThreadOutboxMessage({
+      environmentId: selectedThreadShell.environmentId,
+      threadId: selectedThreadShell.id,
+      messageId,
+      commandId: CommandId.make(metadata.commandId),
+      attachments: [],
+      modelSelection,
+      runtimeMode,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      createdAt: metadata.createdAt,
+      ...buildSpokenSend({
+        text,
+        running: activeThreadBusy || settingUp,
+        canSteer: canSteerActiveTurn && !settingUp,
+        followUpBehavior,
+      }),
+    });
+    return messageId;
+  };
+
   // Side chats do not nest or start from subagents, and need a server that forks them.
   const sideChatUnavailableReason = (() => {
     const serverConfig = selectedEnvironmentRuntime?.serverConfig;
@@ -951,6 +981,7 @@ export function useThreadComposerState(input: {
     onNativePasteText,
     onRemoveDraftImage,
     onSendMessage,
+    sendSpokenMessage,
     sideChatUnavailableReason,
   };
 }

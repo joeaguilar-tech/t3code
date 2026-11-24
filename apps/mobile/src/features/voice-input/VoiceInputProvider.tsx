@@ -86,7 +86,7 @@ const voiceInputAtom = Atom.make((get) => {
   let keepAwakeSequence = 0;
   let audioToken: ReturnType<typeof acquireAudioSession> | null = null;
   const permission = createVoiceRecordingPermission(() => {
-    void session.controller.appMovedToBackground();
+    session.appMovedToBackground();
   });
   const recorder = createLazyVoiceRecorder({
     getDestination: () => (registry.get(voiceRouteAtom) === null ? "local" : "environment"),
@@ -95,7 +95,7 @@ const voiceInputAtom = Atom.make((get) => {
         ? createVoiceRecorder(VOICE_RECORDING_OPTIONS)
         : new AudioModule.AudioRecorder(VOICE_RECORDING_OPTIONS),
     onStatus: (status: RecordingStatus) => {
-      session.controller.handleRecorderStatus({
+      session.handleRecorderStatus({
         isFinished: status.isFinished,
         hasError: status.hasError || status.mediaServicesDidReset === true,
         error: status.error,
@@ -127,9 +127,10 @@ const voiceInputAtom = Atom.make((get) => {
       return transcriber === "checking" ? null : transcriber;
     },
     requestPermission: permission.requestPermission,
-    configureRecording: async (kind) => {
+    configureRecording: async (kind, onAcquired) => {
       const token = acquireAudioSession(kind);
       audioToken = token;
+      onAcquired?.();
       try {
         await activateAudioSession(token);
       } catch (error) {
@@ -137,9 +138,10 @@ const voiceInputAtom = Atom.make((get) => {
         throw error;
       }
     },
-    releaseRecording: async () => {
-      if (audioToken) await releaseAudioSession(audioToken);
+    releaseRecording: async (retain) => {
+      const token = audioToken;
       audioToken = null;
+      if (token && !retain?.(token)) await releaseAudioSession(token);
     },
     deleteRecording: (uri) => new File(uri).delete(),
     sampleRecording: () => {
@@ -159,6 +161,12 @@ const voiceInputAtom = Atom.make((get) => {
   });
   return { session, audioLevels };
 }).pipe(Atom.keepAlive, Atom.withLabel("mobile:voice-input"));
+
+export function useVoiceInputCapture() {
+  const { session } = useAtomValue(voiceInputAtom);
+  const available = useAtomValue(voiceInputAvailableAtom);
+  return { session, available };
+}
 
 export function useGlobalVoiceInput() {
   const { session, audioLevels } = useAtomValue(voiceInputAtom);
