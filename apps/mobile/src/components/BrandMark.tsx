@@ -6,8 +6,15 @@ import { AppText as Text } from "./ui/AppText";
 import { T3_CODE_BRAND_MARK_SOURCE } from "./brandAssets";
 
 const appVariant = Constants.expoConfig?.extra?.appVariant;
+const stageLabelOverride = Constants.expoConfig?.extra?.stageLabel;
 const DEFAULT_STAGE_LABEL =
-  appVariant === "development" ? "Dev" : appVariant === "preview" ? "Preview" : "Beta";
+  typeof stageLabelOverride === "string" && stageLabelOverride.length > 0
+    ? stageLabelOverride
+    : appVariant === "development"
+      ? "Dev"
+      : appVariant === "preview"
+        ? "Preview"
+        : "Beta";
 
 export function BrandMark(props: { readonly compact?: boolean; readonly stageLabel?: string }) {
   const compact = props.compact ?? false;

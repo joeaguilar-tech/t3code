@@ -474,6 +474,7 @@ const config: ExpoConfig = {
       process.env.T3CODE_FEATURE_SECRETS?.trim().toLowerCase() ?? "",
     ),
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
+    stageLabel: repoEnv.T3CODE_MOBILE_STAGE_LABEL?.trim() || null,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },

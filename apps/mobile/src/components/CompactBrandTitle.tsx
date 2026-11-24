@@ -24,7 +24,10 @@ export function CompactBrandTitle(
     readonly fit?: boolean;
   } = {},
 ) {
-  const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
+  const stageLabel = resolveMobileStageLabel(
+    Constants.expoConfig?.extra?.appVariant,
+    Constants.expoConfig?.extra?.stageLabel,
+  );
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
