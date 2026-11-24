@@ -121,7 +121,7 @@ describe("splitSpokenReply", () => {
       "Done. The rest is on your screen.",
       true,
     ],
-    ["setext heading", "Title\n===\nBody text.", "Title Body text.", false],
+    ["setext heading", "Title\n===\nBody text.", "Title. Body text.", false],
     ["task list", "- [ ] Task one.\n- [x] Task two.", "Task one. Task two.", false],
     ["multiline emphasis", "**Bold\ntext** here.", "Bold text here.", false],
     ["strikethrough", "This is ~~wrong~~ right.", "This is wrong right.", false],
@@ -180,8 +180,8 @@ describe("splitSpokenReply", () => {
     [
       "documentation path between the article and file",
       "Open the docs/README.md file.",
-      "Open the docs/README.md file.",
-      false,
+      "The answer is on your screen.",
+      true,
     ],
     [
       "absolute file without a determiner",
@@ -246,7 +246,7 @@ describe("splitSpokenReply", () => {
     [
       "code inside a bullet list item",
       "- item\n\n        code here\n\nAfter.",
-      "item After. The rest is on your screen.",
+      "item. After. The rest is on your screen.",
       true,
     ],
     [
@@ -318,7 +318,7 @@ describe("splitSpokenReply", () => {
     [
       "Markdown in a divider blurb",
       "## **Done**\n- Read [the guide](https://example.com).\n1. _Try again._ ![screenshot](image.png)\n---\nDetails.",
-      "Done Read the guide. Try again. The rest is on your screen.",
+      "Done. Read the guide. Try again. The rest is on your screen.",
       true,
     ],
     [
@@ -462,7 +462,97 @@ describe("splitSpokenReply", () => {
     ],
     ["bare domain", "Open example.com.", "Open example.com.", false],
     ["Windows path", "Open C:\\Users\\joe\\app.ts.", "Open C:\\Users\\joe\\app.ts.", false],
-    ["uppercase second segment", "Open src/App.tsx.", "Open src/App.tsx.", false],
+    ["uppercase second segment", "Open src/App.tsx.", "The answer is on your screen.", true],
+    [
+      "component path and lowercase file path",
+      "Edit components/Button.tsx. Edit src/index.ts. Done.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "slash prose and uppercase first segments",
+      "Use React/Next.js, Next.js/React, TCP/IP and and/or.",
+      "Use React/Next.js, Next.js/React, TCP/IP and and/or.",
+      false,
+    ],
+    [
+      "one unpunctuated list item contains a path",
+      "Changes:\n- Fixed the login bug\n- Updated src/auth.ts",
+      "Changes: Fixed the login bug. The rest is on your screen.",
+      true,
+    ],
+    [
+      "middle numbered item contains a path",
+      "Fixed:\n1. The login redirect\n2. The crash in src/auth.ts\n3. The flaky test",
+      "Fixed: The login redirect. The flaky test. The rest is on your screen.",
+      true,
+    ],
+    [
+      "heading and paragraph before a paragraph with a path",
+      "## Summary\nI fixed the bug\n\nI also edited src/a.ts and it works.",
+      "Summary. I fixed the bug. The rest is on your screen.",
+      true,
+    ],
+    [
+      "unpunctuated paragraph before a paragraph with a path",
+      "Done\n\nSee src/a.ts for details.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "path followed by a colon",
+      "Edit src/index.ts: add a line.",
+      "The answer is on your screen.",
+      true,
+    ],
+    [
+      "parenthesized path followed by a colon",
+      "Look in (src/index.ts): it is there. Done.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "dotted initialism before a path in the same sentence",
+      "The U.S. team updated src/app.ts. Everything passes.",
+      "Everything passes. The rest is on your screen.",
+      true,
+    ],
+    [
+      "abbreviation before a number and path",
+      "It costs approx. 5 dollars in src/a.ts. Done.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "unlisted abbreviation followed by lowercase prose",
+      "The shipment weighs 5 lbs. before packing in src/a.ts. Done.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "dotted initialism followed by an uppercase word",
+      "The U.K. Team edited src/a.ts. Done.",
+      "Done. The rest is on your screen.",
+      true,
+    ],
+    [
+      "etc ends a sentence before an uppercase word",
+      "I bought apples, oranges, etc. Then I edited src/a.ts. All good.",
+      "I bought apples, oranges, etc. All good. The rest is on your screen.",
+      true,
+    ],
+    [
+      "mailto URL without slashes",
+      "Email mailto:bob@example.com for help. Thanks.",
+      "Thanks. The rest is on your screen.",
+      true,
+    ],
+    [
+      "tel URL without slashes",
+      "Call tel:+15551234567 for help. Thanks.",
+      "Thanks. The rest is on your screen.",
+      true,
+    ],
     [
       "slash-joined conjunction and ratio",
       "Use and/or and split it 50/50.",
@@ -759,7 +849,7 @@ describe("splitSpokenReply", () => {
   });
 
   it("falls back when the divider blurb exceeds the length cap", () => {
-    expect(splitSpokenReply(`Start here. ${"extra ".repeat(80)}\n---\nDetails.`)).toEqual({
+    expect(splitSpokenReply(`Start here. Extra ${"extra ".repeat(80)}\n---\nDetails.`)).toEqual({
       blurb: "Start here. The rest is on your screen.",
       hasOnScreenPart: true,
     });
