@@ -1,6 +1,15 @@
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { EnvironmentId, type KeybindingRule, type ServerConfig } from "@t3tools/contracts";
-import { compileResolvedKeybindingsConfig } from "@t3tools/shared/keybindings";
+import {
+  EnvironmentId,
+  type KeybindingRule,
+  MAX_KEYBINDINGS_COUNT,
+  type ServerConfig,
+} from "@t3tools/contracts";
+import {
+  compileResolvedKeybindingsConfig,
+  DEFAULT_RESOLVED_KEYBINDINGS,
+  mergeWithDefaultKeybindings,
+} from "@t3tools/shared/keybindings";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -103,6 +112,27 @@ describe("createShortcutKeybindingsAtom", () => {
       );
       expect(harness.cmdN()).toBe(command);
     }
+  });
+
+  it("preserves all shortcuts from a full resolved server config", () => {
+    const fullConfig = config([
+      ...SWAPPED,
+      ...Array.from(
+        { length: MAX_KEYBINDINGS_COUNT - DEFAULT_RESOLVED_KEYBINDINGS.length + 12 },
+        (_, index) => ({
+          key: "f1",
+          command: `script.filler-${index}.run` as const,
+        }),
+      ),
+    ]);
+    const keybindings = mergeWithDefaultKeybindings(fullConfig.keybindings);
+    const harness = makeHarness({
+      primaryEnvironmentId: PRIMARY,
+      primaryConfig: { ...fullConfig, keybindings },
+    });
+
+    expect(harness.cmdN()).toBe("chat.newLocal");
+    expect(harness.keybindings()).toEqual(keybindings);
   });
 
   it("uses the primary config or defaults until the primary is removed", () => {

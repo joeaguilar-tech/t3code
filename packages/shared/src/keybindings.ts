@@ -1,4 +1,5 @@
 import {
+  isForkOnlyKeybindingCommand,
   type KeybindingRule,
   type KeybindingShortcut,
   type KeybindingWhenNode,
@@ -405,15 +406,19 @@ export function mergeWithDefaultKeybindings(
     return [...DEFAULT_RESOLVED_KEYBINDINGS];
   }
 
+  // The web client can pass an already-resolved snapshot with its inherited environment defaults.
   const overriddenCommands = new Set(custom.map((binding) => binding.command));
   const retainedDefaults = DEFAULT_RESOLVED_KEYBINDINGS.filter(
     (binding) => !overriddenCommands.has(binding.command),
   );
-  const merged = [...retainedDefaults, ...custom];
-
-  if (merged.length <= MAX_KEYBINDINGS_COUNT) {
-    return merged;
-  }
-
-  return merged.slice(-MAX_KEYBINDINGS_COUNT);
+  const budgetedDefaultCount = retainedDefaults.filter(
+    (binding) => !isForkOnlyKeybindingCommand(binding.command),
+  ).length;
+  let excess = budgetedDefaultCount + custom.length - MAX_KEYBINDINGS_COUNT;
+  const visibleDefaults = retainedDefaults.filter((binding) => {
+    if (excess <= 0 || isForkOnlyKeybindingCommand(binding.command)) return true;
+    excess -= 1;
+    return false;
+  });
+  return [...visibleDefaults, ...custom];
 }

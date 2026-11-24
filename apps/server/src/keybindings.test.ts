@@ -13,11 +13,17 @@ import * as Stream from "effect/Stream";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as SharedKeybindings from "@t3tools/shared/keybindings";
-import { KeybindingsConfigError, MAX_KEYBINDINGS_COUNT } from "@t3tools/contracts";
+import {
+  isForkOnlyKeybindingCommand,
+  KeybindingsConfigError,
+  MAX_KEYBINDINGS_COUNT,
+  ResolvedKeybindingsConfig,
+} from "@t3tools/contracts";
 
 const KeybindingsConfigJson = Schema.fromJsonString(KeybindingsConfig);
 const encodeKeybindingsConfigJson = Schema.encodeEffect(KeybindingsConfigJson);
 const decodeKeybindingsConfigJson = Schema.decodeUnknownEffect(KeybindingsConfigJson);
+const decodeResolvedKeybindingsConfig = Schema.decodeEffect(ResolvedKeybindingsConfig);
 const layerKeybindings = () => {
   return Keybindings.layer.pipe(
     Layer.provideMerge(
@@ -358,6 +364,17 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       yield* writeKeybindingsConfig(keybindingsConfigPath, [existing, ...fillers]);
       yield* keybindings.syncDefaultKeybindingsOnStartup;
       assert.isFalse(yield* hasModEnter);
+
+      const snapshot = yield* keybindings.getSnapshot;
+      const environmentDefaults = SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS.filter((rule) =>
+        isForkOnlyKeybindingCommand(rule.command),
+      );
+      assert.deepEqual(snapshot.keybindings, [
+        ...environmentDefaults,
+        ...SharedKeybindings.compileResolvedKeybindingsConfig([existing, ...fillers]),
+      ]);
+      const decoded = yield* decodeResolvedKeybindingsConfig(snapshot.keybindings);
+      assert.deepEqual(decoded, snapshot.keybindings);
 
       yield* writeKeybindingsConfig(keybindingsConfigPath, [existing]);
       yield* keybindings.syncDefaultKeybindingsOnStartup;
