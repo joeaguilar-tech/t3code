@@ -3758,6 +3758,8 @@
   "006f2c2416a56768": "预览浏览器",
   "19e1f74805f4a1fb": "智能体浏览器访问",
   "74d09db9719594eb": "允许智能体使用应用内预览浏览器。",
+  "4e1e3b75b566e674": "Hold phone alerts while I'm using this computer",
+  "dd2b04840881de15": "Approvals and questions ring your phone once you step away.",
   "13087312bc6a0b45": "PR",
   "efb65f53a2382026": "合并时移除智能体署名",
   "88631d9ea293eccd": "在支持的托管平台上，从合并和压缩合并的提交信息中移除可识别的智能体署名，保留人类共同作者。包括自动合并。不包括合并队列、堆叠合并和已有提交。",
