@@ -1853,6 +1853,109 @@ describe("Working section beta", () => {
   });
 });
 
+describe("Automations shelf", () => {
+  const failedRun = {
+    runId: RunId.make("run-failed"),
+    status: "failed" as const,
+    requestedAt: "2026-06-01T00:00:00.000Z",
+    startedAt: "2026-06-01T00:00:00.000Z",
+    completedAt: "2026-06-01T01:00:00.000Z",
+    assistantMessageId: null,
+  };
+  const threads = [
+    makeThread({ id: ThreadId.make("active"), title: "active" }),
+    makeThread({ id: ThreadId.make("bound"), title: "bound" }),
+    makeThread({
+      id: ThreadId.make("bound-pinned"),
+      title: "bound-pinned",
+      pinnedAt: "2026-06-01T00:00:00.000Z",
+    }),
+    makeThread({ id: ThreadId.make("bound-asks"), title: "bound-asks", hasPendingUserInput: true }),
+    makeThread({
+      id: ThreadId.make("bound-failed"),
+      title: "bound-failed",
+      latestRun: failedRun,
+      runtime: {
+        status: "failed",
+        activeRunId: null,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: "Codex",
+        lastError: "boom",
+        updatedAt: "2026-06-01T01:00:00.000Z",
+      },
+    }),
+    makeThread({
+      id: ThreadId.make("bound-snoozed"),
+      title: "bound-snoozed",
+      snoozedUntil: "2026-06-03T09:00:00.000Z",
+      snoozedAt: "2026-06-01T12:00:00.000Z",
+    }),
+    makeThread({
+      id: ThreadId.make("bound-settled"),
+      title: "bound-settled",
+      settledOverride: "settled",
+      settledAt: NOW,
+    }),
+  ];
+  const automationThreadKeys = new Set(
+    ["bound", "bound-pinned", "bound-asks", "bound-failed", "bound-snoozed", "bound-settled"].map(
+      (id) => `${threads[0]!.environmentId}:${id}`,
+    ),
+  );
+  const build = (input: Partial<Parameters<typeof buildThreadListV2Items>[0]> = {}) =>
+    buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW,
+      automationThreadKeys,
+      ...input,
+    });
+  const listed = (layout: ReturnType<typeof buildThreadListV2Items>, expanded: boolean) =>
+    buildThreadListV2ListItems({
+      items: layout.items,
+      pendingTasks: [],
+      automationsCount: layout.automationsCount,
+      automationsShelfExpanded: expanded,
+      automationsShelfHeaderIndex: layout.automationsShelfHeaderIndex,
+      snoozedCount: layout.snoozedCount,
+      snoozedShelfExpanded: true,
+      snoozedShelfHeaderIndex: layout.snoozedShelfHeaderIndex,
+      settledCount: layout.settledCount,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+    }).map((item) => (item.type === "v2-thread" ? item.item.thread.id : item.type));
+
+  it("gathers quiet task threads between Working and Snoozed, keeping pins and requests in place", () => {
+    const layout = build({ automationsShelfExpanded: true, snoozedShelfExpanded: true });
+    expect(layout.automationsCount).toBe(2);
+    expect(listed(layout, true)).toEqual([
+      "bound-pinned",
+      "active",
+      "bound-asks",
+      "bound-failed",
+      "v2-automations-shelf",
+      "bound",
+      "bound-settled",
+      "v2-snoozed-shelf",
+      "bound-snoozed",
+    ]);
+  });
+
+  it("collapses by default but keeps the selected thread listed", () => {
+    const environmentId = threads[0]!.environmentId;
+    expect(listed(build(), false)).not.toContain("bound");
+    const selected = build({ selectedThreadKey: `${environmentId}:bound` });
+    expect(listed(selected, false)).toContain("bound");
+    expect(listed(selected, false)).not.toContain("bound-settled");
+  });
+
+  it("lists nothing extra when no task is bound", () => {
+    const layout = build({ automationThreadKeys: new Set() });
+    expect(layout.automationsCount).toBe(0);
+    expect(listed(layout, false)).not.toContain("v2-automations-shelf");
+  });
+});
+
 describe("queued messages keep a settled thread active", () => {
   const threads = [
     makeThread({ id: ThreadId.make("active"), title: "Active" }),

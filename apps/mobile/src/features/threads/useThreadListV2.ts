@@ -62,11 +62,14 @@ export function useThreadListV2(input: {
   readonly shelfPreferencesLoaded: boolean;
   readonly workingShelfEnabled: boolean;
   readonly workingShelfExpanded: boolean;
+  /** Threads a scheduled task sends into, keyed `environmentId:threadId`. */
+  readonly automationThreadKeys: ReadonlySet<string>;
+  readonly automationsShelfExpanded: boolean;
   readonly snoozedShelfExpanded: boolean;
   readonly settledShelfExpanded: boolean;
   readonly selectedThreadKey: string | null;
 }) {
-  const { threads, workingShelfEnabled } = input;
+  const { threads, workingShelfEnabled, automationThreadKeys } = input;
   const layoutTime = useMemo(
     () => threadListV2LayoutTime({ threads, now: input.now, searchQuery: input.searchQuery }),
     [threads, input.now, input.searchQuery],
@@ -151,6 +154,8 @@ export function useThreadListV2(input: {
         isWorking: inbox.isWorking,
         snoozedShelfExpanded: input.snoozedShelfExpanded,
         settledShelfExpanded: input.settledShelfExpanded,
+        automationThreadKeys,
+        automationsShelfExpanded: input.automationsShelfExpanded,
         selectedThreadKey: input.selectedThreadKey,
         isListedSettled: isListed,
         unloadedSettledCount: unloadedCount(
@@ -183,6 +188,8 @@ export function useThreadListV2(input: {
       inbox.isWorking,
       input.snoozedShelfExpanded,
       input.settledShelfExpanded,
+      automationThreadKeys,
+      input.automationsShelfExpanded,
       input.selectedThreadKey,
       isListed,
       unloadedCount,
@@ -217,6 +224,9 @@ export function useThreadListV2(input: {
         workingCount: layout.workingCount,
         workingShelfExpanded: input.workingShelfExpanded,
         workingShelfHeaderIndex: layout.workingShelfHeaderIndex,
+        automationsCount: layout.automationsCount,
+        automationsShelfExpanded: input.automationsShelfExpanded,
+        automationsShelfHeaderIndex: layout.automationsShelfHeaderIndex,
         snoozedCount: layout.snoozedCount,
         snoozedShelfExpanded: input.snoozedShelfExpanded,
         snoozedShelfHeaderIndex: layout.snoozedShelfHeaderIndex,
@@ -233,6 +243,7 @@ export function useThreadListV2(input: {
       layout,
       pendingTasks,
       input.workingShelfExpanded,
+      input.automationsShelfExpanded,
       input.snoozedShelfExpanded,
       input.settledShelfExpanded,
       input.now,

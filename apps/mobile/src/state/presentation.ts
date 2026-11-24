@@ -1,6 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentPresentation } from "@t3tools/client-runtime/connection";
 import {
+  automationThreadKeys,
+  createAutomationTasksAtom,
+  createAutomationThreadKeysAtom,
+} from "@t3tools/client-runtime/state/automation-threads";
+import {
   createEnvironmentPresentationAtoms,
   createEnvironmentSummaryAtoms,
 } from "@t3tools/client-runtime/state/presentation";
@@ -17,10 +22,20 @@ export const environmentPresentations = createEnvironmentPresentationAtoms({
   serverConfigValueAtom: serverEnvironment.configValueAtom,
 });
 
-export const { connectedEnvironmentIdsAtom } = createEnvironmentSummaryAtoms({
+export const { connectedEnvironmentIdsAtom, identitiesAtom } = createEnvironmentSummaryAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   presentationAtom: environmentPresentations.presentationAtom,
 });
+
+/** Threads a scheduled task sends into, across every saved environment. */
+export const automationThreadKeysAtom = createAutomationThreadKeysAtom(
+  createAutomationTasksAtom({
+    environmentsAtom: identitiesAtom,
+    tasksAtom: (environmentId) =>
+      serverEnvironment.scheduledTasksLive({ environmentId, input: {} }),
+  }),
+  automationThreadKeys,
+);
 
 export const threadListEnvironmentsAtom = createThreadListEnvironmentsAtom(
   environmentServerConfigsAtom,

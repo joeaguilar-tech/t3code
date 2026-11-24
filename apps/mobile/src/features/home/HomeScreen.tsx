@@ -67,7 +67,7 @@ import { useThreadListNow } from "../threads/use-thread-list-now";
 import { useSearchScrollRestoration } from "../layout/workspace/useSearchScrollRestoration";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { usePendingThreadOrder } from "../../state/thread-order";
-import { threadListEnvironmentsAtom } from "../../state/presentation";
+import { automationThreadKeysAtom, threadListEnvironmentsAtom } from "../../state/presentation";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
@@ -75,6 +75,7 @@ import {
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
+  ThreadListV2AutomationsShelfHeader,
   ThreadListV2SnoozedShelfHeader,
   ThreadListV2WorkingShelfHeader,
 } from "../threads/thread-list-v2-items";
@@ -385,10 +386,12 @@ export function HomeScreen(props: HomeScreenProps) {
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
+    automationsShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
     toggleSettledShelf,
+    toggleAutomationsShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
@@ -409,6 +412,7 @@ export function HomeScreen(props: HomeScreenProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder();
+  const automationThreadKeys = useAtomValue(automationThreadKeysAtom);
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
@@ -432,6 +436,8 @@ export function HomeScreen(props: HomeScreenProps) {
     shelfPreferencesLoaded,
     workingShelfEnabled,
     workingShelfExpanded,
+    automationThreadKeys,
+    automationsShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
@@ -500,6 +506,16 @@ export function HomeScreen(props: HomeScreenProps) {
           disabled={item.disabled}
           expanded={item.expanded}
           onToggle={toggleWorkingShelf}
+        />
+      );
+    }
+    if (item.type === "v2-automations-shelf") {
+      return (
+        <ThreadListV2AutomationsShelfHeader
+          count={item.count}
+          disabled={item.disabled}
+          expanded={item.expanded}
+          onToggle={toggleAutomationsShelf}
         />
       );
     }

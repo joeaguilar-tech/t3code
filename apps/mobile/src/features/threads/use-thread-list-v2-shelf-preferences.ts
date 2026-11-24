@@ -11,6 +11,8 @@ export function useThreadListV2ShelfPreferences() {
     loaded && preferencesResult.value.threadListSnoozedShelfExpanded === true;
   const settledShelfExpanded =
     loaded && preferencesResult.value.threadListSettledShelfExpanded === true;
+  const automationsShelfExpanded =
+    loaded && preferencesResult.value.threadListAutomationsShelfExpanded === true;
   const workingShelfEnabled = loaded && preferencesResult.value.workingShelfEnabled !== false;
   const workingShelfExpanded =
     loaded && preferencesResult.value.threadListWorkingShelfExpanded === true;
@@ -32,6 +34,14 @@ export function useThreadListV2ShelfPreferences() {
       }),
     });
   };
+  const toggleAutomationsShelf = () => {
+    if (!loaded) return;
+    savePreferences({
+      transform: (current) => ({
+        threadListAutomationsShelfExpanded: current.threadListAutomationsShelfExpanded !== true,
+      }),
+    });
+  };
   const toggleWorkingShelf = () => {
     if (!loaded) return;
     savePreferences({
@@ -43,10 +53,12 @@ export function useThreadListV2ShelfPreferences() {
 
   return {
     loaded,
+    automationsShelfExpanded,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    toggleAutomationsShelf,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,

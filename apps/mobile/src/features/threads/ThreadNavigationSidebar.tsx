@@ -30,7 +30,7 @@ import { useThreadSearch } from "../../state/queries";
 import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 import { useThreadListNow } from "./use-thread-list-now";
 import { usePendingThreadOrder } from "../../state/thread-order";
-import { threadListEnvironmentsAtom } from "../../state/presentation";
+import { automationThreadKeysAtom, threadListEnvironmentsAtom } from "../../state/presentation";
 import {
   useLaunchingThreads,
   usePendingNewTasks,
@@ -65,6 +65,7 @@ import {
   ThreadListV2Row,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
+  ThreadListV2AutomationsShelfHeader,
   ThreadListV2SnoozedShelfHeader,
   ThreadListV2WorkingShelfHeader,
 } from "./thread-list-v2-items";
@@ -243,10 +244,12 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   const {
     loaded: shelfPreferencesLoaded,
     settledShelfExpanded,
+    automationsShelfExpanded,
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
     toggleSettledShelf,
+    toggleAutomationsShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
   } = useThreadListV2ShelfPreferences();
@@ -267,6 +270,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
   } = listEnvironments;
   const resolveProviderInstance = useThreadRowProviderInstanceResolver(providersByEnvironmentId);
   const pendingOrder = usePendingThreadOrder();
+  const automationThreadKeys = useAtomValue(automationThreadKeysAtom);
   const {
     layout: threadListV2Layout,
     items: threadListV2Items,
@@ -290,6 +294,8 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     shelfPreferencesLoaded,
     workingShelfEnabled,
     workingShelfExpanded,
+    automationThreadKeys,
+    automationsShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
@@ -495,6 +501,16 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
             disabled={item.disabled}
             expanded={item.expanded}
             onToggle={toggleWorkingShelf}
+            pane="sidebar"
+          />
+        );
+      case "v2-automations-shelf":
+        return (
+          <ThreadListV2AutomationsShelfHeader
+            count={item.count}
+            disabled={item.disabled}
+            expanded={item.expanded}
+            onToggle={toggleAutomationsShelf}
             pane="sidebar"
           />
         );

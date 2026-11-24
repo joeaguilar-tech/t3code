@@ -12,6 +12,7 @@ import {
   hasUnseenRunFailure,
   type SnoozePreset,
 } from "@t3tools/client-runtime/state/thread-settled";
+import { automationThreadNeedsYou } from "@t3tools/client-runtime/state/automation-threads";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { resolveThreadProviderStack } from "@t3tools/client-runtime/state/models";
 import {
@@ -412,6 +413,8 @@ export interface ThreadListV2Layout {
   readonly listedSettledThreads: ReadonlyArray<EnvironmentThreadShell>;
   readonly workingCount: number;
   readonly workingShelfHeaderIndex: number | null;
+  readonly automationsCount: number;
+  readonly automationsShelfHeaderIndex: number | null;
   readonly snoozedCount: number;
   readonly snoozedShelfHeaderIndex: number | null;
   readonly settledCount: number;
@@ -452,6 +455,14 @@ export interface ThreadListV2WorkingShelfListItem {
   readonly disabled: boolean;
 }
 
+export interface ThreadListV2AutomationsShelfListItem {
+  readonly type: "v2-automations-shelf";
+  readonly key: "v2-automations-shelf";
+  readonly count: number;
+  readonly expanded: boolean;
+  readonly disabled: boolean;
+}
+
 export interface ThreadListV2SnoozedShelfListItem {
   readonly type: "v2-snoozed-shelf";
   readonly key: "v2-snoozed-shelf";
@@ -473,6 +484,7 @@ export type ThreadListV2ListItem =
   | ThreadListV2ThreadListItem
   | ThreadListV2PendingListItem
   | ThreadListV2WorkingShelfListItem
+  | ThreadListV2AutomationsShelfListItem
   | ThreadListV2SnoozedShelfListItem
   | ThreadListV2SettledShelfListItem;
 
@@ -483,6 +495,7 @@ export function isThreadListV2ListItem(value: {
     value.type === "v2-thread" ||
     value.type === "v2-pending" ||
     value.type === "v2-working-shelf" ||
+    value.type === "v2-automations-shelf" ||
     value.type === "v2-snoozed-shelf" ||
     value.type === "v2-settled-shelf"
   );
@@ -522,6 +535,13 @@ export function threadListV2ListItemsAreEqual(
     case "v2-working-shelf":
       return (
         previous.type === "v2-working-shelf" &&
+        previous.count === item.count &&
+        previous.expanded === item.expanded &&
+        previous.disabled === item.disabled
+      );
+    case "v2-automations-shelf":
+      return (
+        previous.type === "v2-automations-shelf" &&
         previous.count === item.count &&
         previous.expanded === item.expanded &&
         previous.disabled === item.disabled
@@ -569,6 +589,9 @@ export function buildThreadListV2ListItems(input: {
   readonly workingCount?: number;
   readonly workingShelfExpanded?: boolean;
   readonly workingShelfHeaderIndex?: number | null;
+  readonly automationsCount?: number;
+  readonly automationsShelfExpanded?: boolean;
+  readonly automationsShelfHeaderIndex?: number | null;
   readonly snoozedCount?: number;
   readonly snoozedShelfExpanded?: boolean;
   readonly snoozedShelfHeaderIndex?: number | null;
@@ -626,8 +649,11 @@ export function buildThreadListV2ListItems(input: {
   const snoozedShelfHeaderIndex = input.snoozedShelfHeaderIndex ?? null;
   const settledCount = input.settledCount ?? 0;
   const settledShelfHeaderIndex = input.settledShelfHeaderIndex ?? null;
+  const automationsCount = input.automationsCount ?? 0;
+  const automationsShelfHeaderIndex = input.automationsShelfHeaderIndex ?? null;
   const snoozedEnd = settledShelfHeaderIndex ?? threadItems.length;
-  const workingEnd = snoozedShelfHeaderIndex ?? snoozedEnd;
+  const automationsEnd = snoozedShelfHeaderIndex ?? snoozedEnd;
+  const workingEnd = automationsShelfHeaderIndex ?? automationsEnd;
   const activeEnd = workingShelfHeaderIndex ?? workingEnd;
   const result: ThreadListV2ListItem[] = [...pendingItems, ...threadItems.slice(0, activeEnd)];
   const shelfDisabled = input.shelfPreferencesLoading === true;
@@ -640,6 +666,16 @@ export function buildThreadListV2ListItems(input: {
       disabled: shelfDisabled,
     });
     result.push(...threadItems.slice(workingShelfHeaderIndex, workingEnd));
+  }
+  if (automationsShelfHeaderIndex !== null && automationsCount > 0) {
+    result.push({
+      type: "v2-automations-shelf",
+      key: "v2-automations-shelf",
+      count: automationsCount,
+      expanded: input.automationsShelfExpanded === true,
+      disabled: shelfDisabled,
+    });
+    result.push(...threadItems.slice(automationsShelfHeaderIndex, automationsEnd));
   }
   if (snoozedShelfHeaderIndex !== null && snoozedCount > 0) {
     result.push({
@@ -714,6 +750,9 @@ export function buildThreadListV2Items(input: {
   readonly inboxReturnAt?: (thread: EnvironmentThreadShell) => number | undefined;
   readonly snoozedShelfExpanded?: boolean;
   readonly settledShelfExpanded?: boolean;
+  /** Threads a scheduled task sends into, keyed `environmentId:threadId`. */
+  readonly automationThreadKeys?: ReadonlySet<string>;
+  readonly automationsShelfExpanded?: boolean;
   readonly selectedThreadKey?: string | null;
   readonly queuedThreadKeys?: ReadonlySet<string>;
   /** Whether the shelf may list a settled row yet; older settled rows load in pages. */
@@ -745,6 +784,7 @@ export function buildThreadListV2Items(input: {
   const working: EnvironmentThreadShell[] = [];
   const settled: EnvironmentThreadShell[] = [];
   const snoozed: EnvironmentThreadShell[] = [];
+  const automations: EnvironmentThreadShell[] = [];
   let nextSnoozeWakeAt: string | null = null;
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
   const listedThreads = input.threads.filter(
@@ -791,6 +831,15 @@ export function buildThreadListV2Items(input: {
       }
       continue;
     }
+    // Same rule as the web sidebar: pins stay pinned, and a request or unseen failure stays in view.
+    if (
+      thread.pinnedAt == null &&
+      input.automationThreadKeys?.has(`${thread.environmentId}:${thread.id}`) === true &&
+      !automationThreadNeedsYou(thread)
+    ) {
+      automations.push(thread);
+      continue;
+    }
     const hasQueuedMessages =
       queuedThreadKeys?.has(`${thread.environmentId}:${thread.id}`) === true;
     if (supportsSettlement && thread.settledOverride === "settled" && !hasQueuedMessages) {
@@ -835,6 +884,8 @@ export function buildThreadListV2Items(input: {
       listedSettledThreads: [],
       workingCount: 0,
       workingShelfHeaderIndex: null,
+      automationsCount: 0,
+      automationsShelfHeaderIndex: null,
       snoozedCount: 0,
       snoozedShelfHeaderIndex: null,
       settledCount: 0,
@@ -863,6 +914,13 @@ export function buildThreadListV2Items(input: {
     input.snoozedShelfExpanded === true
       ? orderedSnoozed
       : orderedSnoozed.filter(
+          (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
+        );
+  const orderedAutomations = sortThreadsForListV2(automations);
+  const visibleAutomations =
+    input.automationsShelfExpanded === true
+      ? orderedAutomations
+      : orderedAutomations.filter(
           (thread) => `${thread.environmentId}:${thread.id}` === selectedThreadKey,
         );
   const orderedSettled = sortSettledThreadsReusingLast(settled);
@@ -926,6 +984,17 @@ export function buildThreadListV2Items(input: {
       isLast: false,
     });
   }
+  const automationsShelfHeaderIndex = orderedAutomations.length > 0 ? items.length : null;
+  for (const thread of visibleAutomations) {
+    items.push({
+      thread,
+      variant: "card",
+      snoozed: false,
+      pinned: false,
+      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
+      isLast: false,
+    });
+  }
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
   for (const thread of visibleSnoozed) {
     items.push({
@@ -958,6 +1027,8 @@ export function buildThreadListV2Items(input: {
     listedSettledThreads: listedSettled,
     workingCount: orderedWorking.length,
     workingShelfHeaderIndex,
+    automationsCount: orderedAutomations.length,
+    automationsShelfHeaderIndex,
     snoozedCount: orderedSnoozed.length,
     snoozedShelfHeaderIndex,
     settledCount: settledTotal,
