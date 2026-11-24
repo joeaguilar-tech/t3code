@@ -281,6 +281,10 @@ const config: ExpoConfig = {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
     },
     infoPlist: {
+      // Home-screen label only; renaming `name` would also rename the native target.
+      ...(repoEnv.T3CODE_IOS_DISPLAY_NAME?.trim()
+        ? { CFBundleDisplayName: repoEnv.T3CODE_IOS_DISPLAY_NAME.trim() }
+        : {}),
       UISupportedInterfaceOrientations: [
         "UIInterfaceOrientationPortrait",
         "UIInterfaceOrientationLandscapeLeft",
