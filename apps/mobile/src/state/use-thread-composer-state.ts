@@ -968,19 +968,24 @@ export function useThreadComposerState(input: {
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
     };
+    const threadKey = scopedThreadKey(environmentId, threadId);
     if (spoken.dispatchMode !== "steer") {
-      await enqueueThreadOutboxMessage({
-        ...settings,
-        environmentId,
-        messageId,
-        attachments: [],
-        ...spoken,
-      });
+      try {
+        await enqueueThreadOutboxMessage({
+          ...settings,
+          environmentId,
+          messageId,
+          attachments: [],
+          ...spoken,
+        });
+      } catch (error) {
+        void mergeComposerDraftContent(threadKey, { text, attachments: [] });
+        throw error;
+      }
       return messageId;
     }
 
     // Voice needs the server's answer to recover from Stop before resolving the transcript.
-    const threadKey = scopedThreadKey(environmentId, threadId);
     clearThreadComposerError(threadKey);
     const message = {
       messageId,
