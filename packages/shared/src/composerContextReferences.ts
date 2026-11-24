@@ -394,7 +394,7 @@ function formatEnvelopeEntry(
 export const SPOKEN_REPLY_NOTE =
   "This message was spoken. The first part of your reply will be read aloud, so start with one to three short, plain sentences. " +
   "Do not put code, commands, file paths, lists, or Markdown in that part, not even backticks around a single word; describe them in words instead. " +
-  "If there is anything to show, say in the spoken part that it is on the screen, then leave a blank line, put --- alone on the next line, and put the code, commands, paths, and details after it. " +
+  'If there is anything to show, end the spoken part with a sentence telling the user it is on the screen, such as "The code is on your screen.", then leave a blank line, put --- alone on the next line, and put the code, commands, paths, and details after it. ' +
   "If the whole answer fits in the spoken part, omit the divider.";
 
 export function projectComposerContextForProvider(input: {
