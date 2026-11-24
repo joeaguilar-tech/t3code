@@ -37,7 +37,7 @@ export function useThreadListV2ShelfPreferences() {
   };
   const toggleAutomationsShelf = () => {
     if (!loaded) return;
-    savePreferences({
+    void savePreferences({
       transform: (current) => ({
         threadListAutomationsShelfExpanded: current.threadListAutomationsShelfExpanded !== true,
       }),

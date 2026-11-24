@@ -763,7 +763,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "hold-phone-alerts-while-present",
     title: msg("Hold phone alerts while I'm using this computer"),
     to: "/settings/general",
-    searchTerms: ["push mobile phone notification quiet silence idle away present desktop"],
+    searchTerms: [msg("push mobile phone notification quiet silence idle away present desktop")],
   },
   {
     id: "language",

@@ -26,6 +26,7 @@ import {
   useHandleNewThread,
 } from "../../hooks/useHandleNewThread";
 import { scopedProjectKey } from "@t3tools/client-runtime/environment";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { getClientSettings, useClientSettings } from "../../hooks/useSettings";
@@ -320,6 +321,9 @@ export function SnapShotCoordinator() {
         readProjects(),
         useUiStateStore.getState().projectOrder,
         lastUsedProjectKey,
+        true,
+        null,
+        selectProjectGroupingSettings(getClientSettings()),
       ),
     );
     if (!projectRef) return null;

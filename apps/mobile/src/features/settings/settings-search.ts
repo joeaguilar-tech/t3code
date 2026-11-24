@@ -115,6 +115,7 @@ const SETTINGS_SEARCH_TERMS = {
     msg("usage limits", { $context: "settings search keyword" }),
     msg("auto-resume", { $context: "settings search keyword" }),
     msg("thread behavior", { $context: "settings search keyword" }),
+    msg("hold phone alerts", { $context: "settings search keyword" }),
   ],
   SettingsFollowUp: [
     msg("follow-ups", { $context: "settings search keyword" }),

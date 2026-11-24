@@ -137,7 +137,7 @@ describe("window capture target resolution", () => {
     };
     const member = { ...root, id: ProjectId.make("member"), workspaceRoot: "/repo/member" };
     vi.mocked(entities.readProjects).mockReturnValue([member, root]);
-    const handleNewThread = vi.fn(async () => undefined);
+    const handleNewThread = vi.fn(async () => null);
     vi.mocked(newThread.useHandleNewThread).mockReturnValue({
       activeDraftThread: null,
       activeThread: null,

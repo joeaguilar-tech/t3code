@@ -559,7 +559,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.holdPhoneAlertsWhilePresent !==
     DEFAULT_UNIFIED_SETTINGS.holdPhoneAlertsWhilePresent
-      ? ["Hold phone alerts while I'm using this computer"]
+      ? [gt("Hold phone alerts while I'm using this computer")]
       : []),
     ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
       ? [gt("Resume after usage limits")]
