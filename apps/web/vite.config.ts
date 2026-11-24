@@ -293,7 +293,12 @@ function bootstrapTitlePlugin(): Plugin {
       });
       const titled = html.replace(/<title>[^<]*<\/title>/, `<title>${displayName}</title>`);
       return forkBrand
-        ? titled.replace(/(id="boot-shell-logo"[^>]* alt=")[^"]*"/, `$1${baseName}"`)
+        ? titled
+            .replace(/(id="boot-shell-logo"[^>]* alt=")[^"]*"/, `$1${baseName}"`)
+            .replace(
+              /(id="boot-shell-card"[^>]* aria-label=")[^"]*"/,
+              `$1${baseName} splash screen"`,
+            )
         : titled;
     },
   };
