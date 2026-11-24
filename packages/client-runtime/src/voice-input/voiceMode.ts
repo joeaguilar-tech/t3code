@@ -281,7 +281,7 @@ export class VoiceModeController {
     const send = ++this.sendSequence;
     this.pendingSends.add(send);
     this.clearListenTimer();
-    if (this.autoMute) this.wantsMicrophone = false;
+    if (this.autoMute && window.timed) this.wantsMicrophone = false;
     this.refresh();
 
     let messageId: string;
