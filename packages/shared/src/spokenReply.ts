@@ -1,10 +1,10 @@
-export const SPOKEN_REPLY_MAX_LENGTH = 400;
-export const SPOKEN_REPLY_REMAINDER = "The rest is on your screen.";
-export const SPOKEN_REPLY_SCREEN_ONLY = "I've put it on your screen.";
-export const SPOKEN_REPLY_INLINE_CODE = "the snippet on your screen";
-export const SPOKEN_REPLY_INLINE_CODE_PLURAL = "the snippets on your screen";
-export const SPOKEN_REPLY_URL = "a link";
-export const SPOKEN_REPLY_PATH = "a file";
+const SPOKEN_REPLY_MAX_LENGTH = 400;
+const SPOKEN_REPLY_REMAINDER = "The rest is on your screen.";
+const SPOKEN_REPLY_SCREEN_ONLY = "I've put it on your screen.";
+const SPOKEN_REPLY_INLINE_CODE = "the snippet on your screen";
+const SPOKEN_REPLY_INLINE_CODE_PLURAL = "the snippets on your screen";
+const SPOKEN_REPLY_URL = "a link";
+const SPOKEN_REPLY_PATH = "a file";
 
 const FALLBACK_SENTENCE_LIMIT = 3;
 const INLINE_WORD_MAX_LENGTH = 32;
@@ -12,8 +12,7 @@ const INLINE_WORD = /^[\p{L}\p{N}]+(?:[._-][\p{L}\p{N}]+)*$/u;
 const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 const FENCE_MARKER = /^\s*(`{3,}|~{3,})(.*)$/;
 const LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/;
-const ROOTED_PATH =
-  /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2})?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/g;
+const ROOTED_PATH = /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2})?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/g;
 const RELATIVE_FILE_PATH =
   /(?<![\w./\\])(?=[a-z_.]|[\w.-]+(?:[/\\][\w.-]+)*[/\\][a-z_])[\w.-]+(?:[/\\][\w.-]+)*[/\\][\w-]+(?:\.[A-Za-z][\w-]*)+/g;
 const BARE_URL =

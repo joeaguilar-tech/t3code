@@ -41,6 +41,18 @@ describe("splitSpokenReply", () => {
       false,
     ],
     [
+      "inline path between words",
+      "Open `src/app/main.ts` to see it.",
+      "Open the snippet on your screen to see it. The rest is on your screen.",
+      true,
+    ],
+    [
+      "inline expression between words",
+      "Then `map.get(key)` returns undefined.",
+      "Then the snippet on your screen returns undefined. The rest is on your screen.",
+      true,
+    ],
+    [
       "inline command before sentence punctuation",
       "Run `git branch -a`. It lists all branches.",
       "Run the snippet on your screen. It lists all branches. The rest is on your screen.",
@@ -98,18 +110,8 @@ describe("splitSpokenReply", () => {
       "I set up the React/Next.js app and the TypeScript/Node.js server.",
       false,
     ],
-    [
-      "decimal ratio",
-      "Rated 4.5/5.0 by users.",
-      "Rated 4.5/5.0 by users.",
-      false,
-    ],
-    [
-      "multiplier ratio",
-      "Ratio is 1.5x/2.0x now.",
-      "Ratio is 1.5x/2.0x now.",
-      false,
-    ],
+    ["decimal ratio", "Rated 4.5/5.0 by users.", "Rated 4.5/5.0 by users.", false],
+    ["multiplier ratio", "Ratio is 1.5x/2.0x now.", "Ratio is 1.5x/2.0x now.", false],
     [
       "relative files",
       "See src/index.ts, src/App.tsx and apps/web/src/Foo.tsx.",
