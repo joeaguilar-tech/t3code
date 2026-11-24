@@ -32,6 +32,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   MessageId,
+  ORCHESTRATION_V2_STOPPING_STEER_REJECTION,
   OrchestrationV2DispatchCommandError,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type EnvironmentId,
@@ -997,6 +998,7 @@ export function useThreadComposerState(input: {
           commandId,
           creationSource: "mobile",
           dispatchMode,
+          resendAfterSocketLoss: false,
           message,
           titleSeed,
         },
@@ -1007,15 +1009,15 @@ export function useThreadComposerState(input: {
       if (
         isDispatchCommandError(error) &&
         error.commandType === "message.dispatch" &&
-        /^Target run \S+ is (?:stopping|completed|interrupted|failed|cancelled|rolled_back) and cannot be steered\.$/.test(
-          error.detail ?? error.message,
-        )
+        /^Target run \S+ (.+)$/.exec(error.detail ?? error.message)?.[1] ===
+          ORCHESTRATION_V2_STOPPING_STEER_REJECTION
       ) {
         result = await dispatch("start", CommandId.make(uuidv4()));
       }
     }
     if (result._tag === "Failure") {
       const error = squashAtomCommandFailure(result);
+      void mergeComposerDraftContent(threadKey, { text, attachments: [] });
       setThreadComposerError(
         threadKey,
         errorDisplayMessage(error, resolve) ?? resolve(msg("The message could not be sent.")),

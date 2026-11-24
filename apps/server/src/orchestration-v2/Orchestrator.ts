@@ -23,6 +23,7 @@ import {
   legacyThreadPullRequestKey,
 } from "../sourceControl/threadPullRequests.ts";
 import {
+  ORCHESTRATION_V2_STOPPING_STEER_REJECTION,
   ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE,
   type ChatAttachment,
   CommandId,
@@ -6548,7 +6549,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return yield* new OrchestratorDispatchError({
         commandId: input.command.commandId,
         commandType: input.command.type,
-        cause: `Target run ${targetRun.id} is stopping and cannot be steered.`,
+        cause: `Target run ${targetRun.id} ${ORCHESTRATION_V2_STOPPING_STEER_REJECTION}`,
       });
     }
     const providerThread = input.projection.providerThreads.find(
