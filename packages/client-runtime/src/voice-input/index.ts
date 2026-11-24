@@ -41,6 +41,7 @@ export {
 } from "./transcription.ts";
 export {
   VoiceModeController,
+  VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE,
   VOICE_MODE_FAILED_PHRASE,
   VOICE_MODE_LISTEN_WINDOW_MS,
   VOICE_MODE_NEEDS_USER_PHRASE,
