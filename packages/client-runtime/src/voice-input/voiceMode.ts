@@ -61,6 +61,12 @@ export type VoiceModeDependencies = {
 
 type RunResult = Extract<VoiceModeRunEvent, { type: "finished" | "failed" }>;
 
+type SpeechRequest = {
+  text: string;
+  reopen: boolean;
+  resolve: () => void;
+};
+
 type MicrophoneWindow = {
   postReply: boolean;
   finishing: boolean;
@@ -85,8 +91,8 @@ export class VoiceModeController {
   private wantsMicrophone = true;
   private manuallyMuted = false;
   private microphoneWindow: MicrophoneWindow | undefined;
-  private playback: object | undefined;
-  private heldPlayback = 0;
+  private playback: SpeechRequest | undefined;
+  private readonly speechQueue: SpeechRequest[] = [];
   private sendSequence = 0;
   private readonly pendingSends = new Set<number>();
   private latestMessageId: string | undefined;
@@ -142,7 +148,7 @@ export class VoiceModeController {
   }
 
   interrupt(): void {
-    if (!this.playback) return;
+    if (!this.playback && this.speechQueue.length === 0) return;
     this.stopPlayback();
     this.manuallyMuted = false;
     this.wantsMicrophone = true;
@@ -201,7 +207,7 @@ export class VoiceModeController {
         if (this.run === "paused") return;
         this.run = "paused";
         this.clearWorkingTimer();
-        await this.speak(VOICE_MODE_NEEDS_USER_PHRASE, false, () => this.run === "paused");
+        await this.speak(VOICE_MODE_NEEDS_USER_PHRASE);
         break;
       case "failed":
       case "finished":
@@ -271,8 +277,9 @@ export class VoiceModeController {
       messageId = await this.dependencies.sendSpokenMessage(text);
     } catch {
       const wasPending = this.pendingSends.delete(send);
-      await this.speak(VOICE_MODE_SEND_FAILED_PHRASE, wasPending);
+      const announcement = this.speak(VOICE_MODE_SEND_FAILED_PHRASE, wasPending);
       if (wasPending) await this.resumeRunTracking();
+      await announcement;
       return;
     }
     if (!this.pendingSends.has(send)) return;
@@ -287,7 +294,9 @@ export class VoiceModeController {
 
   private async resumeRunTracking(): Promise<void> {
     if (this.pendingSends.size > 0) return;
-    for (const result of this.takeBufferedRunResults()) await this.announceRunResult(result);
+    await Promise.all(
+      this.takeBufferedRunResults().map((result) => this.announceRunResult(result)),
+    );
     if (this.lifecycle !== "active") return;
     this.scheduleWorkingTimer();
     this.refresh();
@@ -300,31 +309,39 @@ export class VoiceModeController {
     return results;
   }
 
-  private async speak(text: string, reopen = false, shouldSpeak?: () => boolean): Promise<void> {
+  private speak(text: string, reopen = false): Promise<void> {
+    if (this.lifecycle !== "active") return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.speechQueue.push({ text, reopen, resolve });
+      if (!this.playback && this.speechQueue.length === 1) void this.playQueuedSpeech();
+    });
+  }
+
+  private async playQueuedSpeech(): Promise<void> {
+    const first = this.speechQueue[0];
     const protection = this.microphoneWindow?.protection;
     if (protection) {
-      this.heldPlayback++;
       this.refresh();
       await protection.settled;
-      this.heldPlayback--;
+      if (this.speechQueue[0] !== first) return;
     }
-    if (this.lifecycle !== "active") return;
-    if (shouldSpeak && !shouldSpeak()) {
-      this.refresh();
-      return;
-    }
-    this.stopPlayback();
-    if (text) {
-      const playback = {};
-      this.playback = playback;
-      this.refresh();
-      try {
-        await this.dependencies.speech.speak(text);
-      } catch {
-        // A playback failure still releases the microphone.
+
+    let reopen = false;
+    for (let request = this.speechQueue.shift(); request; request = this.speechQueue.shift()) {
+      if (request.text) {
+        this.playback = request;
+        this.refresh();
+        if (this.playback !== request) return;
+        try {
+          await this.dependencies.speech.speak(request.text);
+        } catch {
+          // A playback failure still releases the microphone.
+        }
+        if (this.playback !== request) return;
+        this.playback = undefined;
       }
-      if (this.playback !== playback) return;
-      this.playback = undefined;
+      reopen ||= request.reopen;
+      request.resolve();
     }
 
     if (reopen && this.pendingSends.size === 0 && this.latestMessageId === undefined) {
@@ -345,9 +362,12 @@ export class VoiceModeController {
   }
 
   private stopPlayback(): void {
-    if (!this.playback) return;
+    for (const request of this.speechQueue.splice(0)) request.resolve();
+    const playback = this.playback;
+    if (!playback) return;
     this.playback = undefined;
     this.dependencies.speech.stopSpeaking();
+    playback.resolve();
   }
 
   private scheduleWorkingTimer(): void {
@@ -362,7 +382,7 @@ export class VoiceModeController {
     this.cancelWorkingTimer = this.dependencies.timer.schedule(VOICE_MODE_WORKING_DELAY_MS, () => {
       this.cancelWorkingTimer = undefined;
       this.workingAnnounced = true;
-      if (this.microphoneWindow?.protection) return;
+      if (this.microphoneWindow?.protection || this.playback || this.speechQueue.length > 0) return;
       return this.speak(VOICE_MODE_WORKING_PHRASE);
     });
   }
@@ -382,7 +402,7 @@ export class VoiceModeController {
       this.lifecycle === "active" &&
       this.run !== "paused" &&
       !this.playback &&
-      this.heldPlayback === 0 &&
+      this.speechQueue.length === 0 &&
       !this.manuallyMuted &&
       this.wantsMicrophone
     );

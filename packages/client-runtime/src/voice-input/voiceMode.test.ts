@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   VoiceModeController,
+  VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE,
   VOICE_MODE_FAILED_PHRASE,
   VOICE_MODE_LISTEN_WINDOW_MS,
   VOICE_MODE_NEEDS_USER_PHRASE,
+  VOICE_MODE_SEND_FAILED_PHRASE,
   VOICE_MODE_WORKING_DELAY_MS,
   VOICE_MODE_WORKING_PHRASE,
   type VoiceModeMicrophone,
@@ -395,7 +397,7 @@ describe("VoiceModeController", () => {
     },
   );
 
-  it("skips a held needs-user announcement when the run resumes before the transcript", async () => {
+  it("speaks a held needs-user announcement even if the run resumes before the transcript", async () => {
     const h = setup(false);
     await h.say("first");
     await h.running();
@@ -405,9 +407,133 @@ describe("VoiceModeController", () => {
     await h.say("follow-up");
     await needsUser;
 
-    expect(h.speech.speak).not.toHaveBeenCalled();
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(VOICE_MODE_NEEDS_USER_PHRASE);
     expect(h.controller.currentState).toMatchObject({ phase: "waiting", microphoneOpen: true });
   });
+
+  async function followUpDuringReply() {
+    const h = setup(false);
+    const playback = Promise.withResolvers<void>();
+    h.speech.speak.mockReturnValueOnce(playback.promise);
+    await h.say("A");
+    await h.running();
+    h.controller.noteSpeechActivity();
+    h.controller.tapToSend();
+    const firstReply = h.finish("id:A");
+    return { ...h, firstReply, playback };
+  }
+
+  it("finishes the first reply when a spoken follow-up takes longer than the working delay", async () => {
+    const h = await followUpDuringReply();
+    await h.say("B");
+    await h.running();
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+
+    expect(h.speech.stopSpeaking).not.toHaveBeenCalled();
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+    h.playback.resolve();
+    await h.firstReply;
+    await h.running();
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    expect(h.speech.speak).toHaveBeenCalledOnce();
+  });
+
+  it("announces a rejected spoken follow-up after the first reply finishes", async () => {
+    const h = await followUpDuringReply();
+    const send = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(send.promise);
+    const followUp = h.say("B");
+    send.reject(new Error("send failed"));
+    await Promise.resolve();
+
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    expect(h.speech.stopSpeaking).not.toHaveBeenCalled();
+    h.playback.resolve();
+    await Promise.all([h.firstReply, followUp]);
+    expect(h.speech.speak.mock.calls).toEqual([["spoken: reply"], [VOICE_MODE_SEND_FAILED_PHRASE]]);
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+  });
+
+  it("skips the working phrase when an announcement is waiting to play", async () => {
+    const h = setup(false);
+    await h.say("B");
+    await h.running();
+    h.controller.noteSpeechActivity();
+    const announcement = h.fail("id:A");
+    await h.running();
+    h.controller.cancelTurn();
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    await announcement;
+
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(
+      VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE,
+    );
+  });
+
+  it("speaks queued notifications in order even after the run leaves needs-user", async () => {
+    const h = await followUpDuringReply();
+    await h.say("B");
+    const earlier = h.fail("id:A");
+    const needsUser = h.controller.handleRunEvent({ type: "needs-user" });
+    const failed = h.fail("id:B");
+
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    expect(h.speech.stopSpeaking).not.toHaveBeenCalled();
+    h.playback.resolve();
+    await Promise.all([h.firstReply, earlier, needsUser, failed]);
+    expect(h.speech.speak.mock.calls).toEqual([
+      ["spoken: reply"],
+      [VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE],
+      [VOICE_MODE_NEEDS_USER_PHRASE],
+      [VOICE_MODE_FAILED_PHRASE],
+    ]);
+  });
+
+  it("reads a second reply after the first without opening the microphone between them", async () => {
+    const h = await followUpDuringReply();
+    await h.say("B");
+    const states: VoiceModeState[] = [];
+    h.controller.subscribe((state) => states.push(state));
+    const secondPlayback = Promise.withResolvers<void>();
+    h.speech.speak.mockReturnValueOnce(secondPlayback.promise);
+    const secondReply = h.controller.handleRunEvent({
+      type: "finished",
+      finalMessage: "second reply",
+      handledMessageIds: ["id:B"],
+    });
+
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    expect(h.speech.stopSpeaking).not.toHaveBeenCalled();
+    h.playback.resolve();
+    await h.firstReply;
+    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: second reply");
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+    expect(states.some((state) => state.microphoneOpen)).toBe(false);
+    secondPlayback.resolve();
+    await secondReply;
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+  });
+
+  it.each(["interrupt", "end"] as const)(
+    "drops queued speech on %s while preserving a needs-user pause on interrupt",
+    async (action) => {
+      const h = await followUpDuringReply();
+      await h.say("B");
+      const earlier = h.fail("id:A");
+      const needsUser = h.controller.handleRunEvent({ type: "needs-user" });
+      h.controller[action]();
+      h.playback.resolve();
+      await Promise.all([h.firstReply, earlier, needsUser]);
+
+      expect(h.speech.stopSpeaking).toHaveBeenCalledOnce();
+      expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+      expect(h.controller.currentState).toMatchObject({
+        phase: action === "end" ? "ended" : "paused",
+        microphoneOpen: false,
+      });
+    },
+  );
 
   it("keeps the microphone closed until a held reply finishes playing", async () => {
     const h = setup(false);
