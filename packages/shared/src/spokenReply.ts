@@ -30,6 +30,7 @@ const RELATIVE_FILE =
   /^[a-z_.][\w.-]*\/[\w.-]+\.[A-Za-z][\w-]*(?::\d+(?:[:-]\d+)?|#L\d+(?:-L\d+)?)?(?:$|[–—…])/;
 const SENTENCE_END = /[.!?。！？]+["'”’)\]]*(?= |$)/g;
 const ABBREVIATION = /\b(?:Mr|Mrs|Ms|Dr|vs|e\.g|i\.e|a\.m|p\.m)$/i;
+const NUMBER_ABBREVIATION = /\b(?:No|Nos|Fig|Figs|p|pp|Vol|Ch|Sec|Eq|approx)$/i;
 const DOTTED_INITIALISM = /\b(?:[A-Z]\.)+[A-Z]$/;
 
 export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart: boolean } {
@@ -259,7 +260,8 @@ function splitSentences(text: string) {
       const before = text.slice(start, boundary.index);
       const next = text.charAt(end + 1);
       if (
-        /[\p{Ll}\p{Nd}]/u.test(next) ||
+        /\p{Ll}/u.test(next) ||
+        (/\p{Nd}/u.test(next) && NUMBER_ABBREVIATION.test(before)) ||
         DOTTED_INITIALISM.test(before) ||
         ABBREVIATION.test(before)
       ) {
