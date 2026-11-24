@@ -202,6 +202,210 @@ describe("VoiceModeController", () => {
     expect(h.controller.currentState.microphoneOpen).toBe(true);
   });
 
+  it.each(["timeout", "mute", "finished", "needs-user", "failed"] as const)(
+    "sends a finishing transcript even after %s",
+    async (transition) => {
+      const h = setup(transition !== "finished");
+      await h.say("first");
+      if (transition !== "finished") await h.finish("id:first");
+      const transcript = h.currentTranscript();
+      h.controller.tapToSend();
+
+      let feed: Promise<void> | undefined;
+      if (transition === "timeout") {
+        await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+      } else if (transition === "mute") {
+        h.controller.toggleMute();
+      } else if (transition === "finished") {
+        feed = h.finish("id:first");
+      } else {
+        feed = h.controller.handleRunEvent({ type: transition });
+      }
+
+      expect(h.microphone.cancel).not.toHaveBeenCalled();
+      expect(h.speech.speak).toHaveBeenCalledTimes(transition === "finished" ? 0 : 1);
+      await transcript?.("redirect");
+      await feed;
+      expect(h.send).toHaveBeenLastCalledWith("redirect");
+    },
+  );
+
+  it("keeps a post-reply window open once it hears speech", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.finish("id:first");
+    const controller: VoiceModeController & { noteSpeechActivity?: () => void } = h.controller;
+    controller.noteSpeechActivity?.();
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    expect(h.microphone.cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(["speech activity", "tap-to-send"])(
+    "skips the working phrase during %s",
+    async (activity) => {
+      const h = setup(false);
+      await h.say("first");
+      await h.running();
+      const transcript = h.currentTranscript();
+      const controller: VoiceModeController & { noteSpeechActivity?: () => void } = h.controller;
+      if (activity === "speech activity") controller.noteSpeechActivity?.();
+      else controller.tapToSend();
+      await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+      expect(h.speech.speak).not.toHaveBeenCalled();
+      await transcript?.("follow-up");
+      expect(h.send).toHaveBeenLastCalledWith("follow-up");
+    },
+  );
+
+  it("speaks a matching finish that arrives before the send returns its ID", async () => {
+    const h = setup();
+    const send = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(send.promise);
+    const pending = h.say("first");
+    await h.finish("id:first");
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    send.resolve("id:first");
+    await pending;
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it("announces a rejected send and resumes listening", async () => {
+    const h = setup();
+    h.send.mockRejectedValueOnce(new Error("send failed"));
+    await h.say("first");
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(
+      "That message didn't send. Check the screen.",
+    );
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it("speaks the previous message's buffered reply after a follow-up send rejects", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.running();
+    h.controller.toggleMute();
+    const send = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(send.promise);
+    const pending = h.say("follow-up");
+    await h.finish("id:first");
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    send.reject(new Error("send failed"));
+    await pending;
+    expect(h.speech.speak).toHaveBeenCalledTimes(2);
+    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: reply");
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it("announces an earlier overlapping send failure and still reads the newer reply", async () => {
+    const h = setup(false);
+    const first = Promise.withResolvers<string>();
+    const second = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const firstSend = h.say("first");
+    const secondSend = h.say("second");
+    await h.finish("id:second");
+    first.reject(new Error("send failed"));
+    await firstSend;
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(
+      "That message didn't send. Check the screen.",
+    );
+    second.resolve("id:second");
+    await secondSend;
+    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: reply");
+  });
+
+  it.each([true, false])("taps to unmute while paused with auto-mute %s", async (autoMute) => {
+    const h = setup(autoMute);
+    await h.say("first");
+    await h.controller.handleRunEvent({ type: "needs-user" });
+    h.controller.toggleMute();
+    expect(h.controller.currentState).toMatchObject({
+      phase: "paused",
+      microphoneOpen: false,
+      manuallyMuted: false,
+    });
+    await h.running();
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+  });
+
+  it("leaves the microphone unmuted after a mute toggle during playback", async () => {
+    const h = setup(false);
+    const playback = Promise.withResolvers<void>();
+    h.speech.speak.mockReturnValueOnce(playback.promise);
+    await h.say("first");
+    const finished = h.finish("id:first");
+    h.controller.toggleMute();
+    playback.resolve();
+    await finished;
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: false, microphoneOpen: true });
+  });
+
+  it("resumes listening when the paused run finishes", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.controller.handleRunEvent({ type: "needs-user" });
+    await h.finish("id:first");
+    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: reply");
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it("announces another slow run after the previous reply", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.running();
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    await h.finish("id:first");
+    await h.say("second");
+    await h.running();
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    expect(h.speech.speak.mock.calls).toEqual([
+      [VOICE_MODE_WORKING_PHRASE],
+      ["spoken: reply"],
+      [VOICE_MODE_WORKING_PHRASE],
+    ]);
+  });
+
+  it("keeps listening after a failed run with auto-mute off", async () => {
+    const h = setup(false);
+    await h.say("first");
+    await h.running();
+    await h.controller.handleRunEvent({ type: "failed" });
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(VOICE_MODE_FAILED_PHRASE);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it.each(["run", "listen window"])("discards the current utterance during a %s", async (phase) => {
+    const h = setup();
+    await h.say("first");
+    if (phase === "run") {
+      await h.running();
+      h.controller.toggleMute();
+    } else {
+      await h.finish("id:first");
+    }
+    const canceledTranscript = h.currentTranscript();
+    h.controller.cancelTurn();
+    await canceledTranscript?.("discard me");
+    expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    expect(h.controller.currentState.microphoneOpen).toBe(phase === "run");
+  });
+
+  it("cancels the working timer on end", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.running();
+    expect([...h.timers.values()]).toEqual([VOICE_MODE_WORKING_DELAY_MS]);
+    h.controller.end();
+    expect(h.timers.size).toBe(0);
+    await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    expect(h.speech.speak).not.toHaveBeenCalled();
+  });
+
   it("ends during speech and ignores late playback and feed events", async () => {
     const h = setup();
     const playback = Promise.withResolvers<void>();
