@@ -176,17 +176,19 @@ describe("DesktopAppIdentity", () => {
     ),
   );
 
-  it.effect.each([
-    { stage: "Beta", environment: {} },
-    {
-      stage: "Nightly",
-      environment: { appVersion: "0.0.43-nightly.20260929.2428" },
-    },
-    {
-      stage: "Dev",
-      environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
-    },
-  ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
+  it.effect.each(
+    [
+      { stage: "Beta", environment: {} },
+      {
+        stage: "Nightly",
+        environment: { appVersion: "0.0.43-nightly.20260929.2428" },
+      },
+      {
+        stage: "Dev",
+        environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
+      },
+    ].flatMap((testCase) => ["", "j3"].map((brand) => ({ ...testCase, brand }))),
+  )("preserves the runtime name for $stage (brand: $brand)", ({ stage, environment, brand }) => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],
       setDockIcon: [],
@@ -204,10 +206,20 @@ describe("DesktopAppIdentity", () => {
         assert.match(runtimeName.replaceAll(" ", ""), /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/);
         assert.equal(
           calls.setAboutPanelOptions[0]?.applicationName,
-          stage === "Beta" ? "T3 Code (Joe)" : `T3 Code (${stage})`,
+          brand === "j3"
+            ? stage === "Beta"
+              ? "J3 Code"
+              : `J3 Code (${stage})`
+            : `T3 Code (${stage})`,
+        );
+        assert.equal(
+          calls.setAboutPanelOptions[0]?.credits,
+          brand === "j3"
+            ? "J3 Code is an unofficial fork based on the T3 Code source code. It is not affiliated with, endorsed by, or maintained by T3 Tools, Inc."
+            : undefined,
         );
       }),
-      { calls, environment },
+      { calls, environment: { ...environment, brand } },
     );
   });
 });
