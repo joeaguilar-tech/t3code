@@ -1,6 +1,7 @@
-# Fork-only: release T3 Code (Joe) when main changes or pingdotgg/t3code publishes a
-# stable release. A change to main (or a manual run) first merges upstream main; the
-# hourly check merges upstream's latest release. Versions follow that release: upstream
+# Fork-only: release T3 Code (Joe) when main differs from the last release or a manual
+# run requests a forced release. Upstream syncs happen outside this workflow. A manual
+# run can optionally merge upstream_ref before releasing. Versions follow the latest
+# upstream release: upstream
 # X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is newer than the last and
 # installed apps update from these releases (the feed comes from GITHUB_REPOSITORY).
 # packages/shared/src/forkVersion.ts maps it back for runtime downloads.
@@ -9,8 +10,6 @@ name: Fork release
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -18,9 +17,9 @@ on:
         type: boolean
         default: false
       upstream_ref:
-        description: Upstream ref to merge (default main; use a release tag to release without nightly changes)
+        description: Optional upstream ref to merge into main before releasing
         type: string
-        default: main
+        default: ""
 
 permissions:
   contents: write
@@ -41,7 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
-      upstream_ref: ${{ steps.plan.outputs.upstream_ref }}
       skip: ${{ steps.plan.outputs.skip }}
     steps:
       - name: Disable upstream workflows
@@ -58,30 +56,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force }}
           INPUT_UPSTREAM_REF: ${{ inputs.upstream_ref }}
-          EVENT: ${{ github.event_name }}
-          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          # The release job pushes its own upstream merge to main; that run already releases it.
-          if [[ "$EVENT" == "push" && "$HEAD_MESSAGE" == "Merge upstream "* ]]; then
-            echo "Push is this workflow's own upstream merge."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ "$EVENT" == "schedule" ]]; then upstream_ref="$tag"; else upstream_ref="${INPUT_UPSTREAM_REF:-main}"; fi
-          echo "upstream_ref=$upstream_ref" >> "$GITHUB_OUTPUT"
-          upstream_sha="$(gh api "repos/$UPSTREAM/commits/$upstream_ref" --jq .sha)"
           main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
-          # Fork networks share objects, so upstream SHAs resolve here. Unknown means merge.
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$upstream_sha...$main_sha" --jq .status 2>/dev/null || echo unknown)"
+          merge_needed=false
+          if [[ -n "$INPUT_UPSTREAM_REF" ]]; then
+            upstream_sha="$(gh api "repos/$UPSTREAM/commits/$INPUT_UPSTREAM_REF" --jq .sha)"
+            # Fork networks share objects, so upstream SHAs resolve here. Unknown means merge.
+            status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$upstream_sha...$main_sha" --jq .status 2>/dev/null || echo unknown)"
+            echo "upstream $INPUT_UPSTREAM_REF ($status vs main)"
+            if [[ "$status" != "ahead" && "$status" != "identical" ]]; then
+              merge_needed=true
+            fi
+          fi
           last_tag="$(gh release view -R "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
           last_sha=""
           if [[ -n "$last_tag" ]]; then
             last_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$last_tag" --jq .sha 2>/dev/null || true)"
           fi
-          echo "upstream $upstream_ref ($status vs main); main $main_sha; last release $last_tag ($last_sha)"
-          if [[ "$FORCE" != "true" && ( "$status" == "ahead" || "$status" == "identical" ) && "$main_sha" == "$last_sha" ]]; then
+          echo "main $main_sha; last release $last_tag ($last_sha)"
+          if [[ "$FORCE" != "true" && "$merge_needed" == "false" && "$main_sha" == "$last_sha" ]]; then
             echo "Nothing new since $last_tag."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
@@ -94,7 +89,7 @@ jobs:
     timeout-minutes: 120
     env:
       TAG: ${{ needs.check.outputs.tag }}
-      UPSTREAM_REF: ${{ needs.check.outputs.upstream_ref }}
+      UPSTREAM_REF: ${{ inputs.upstream_ref }}
     steps:
       - name: Check secrets
         env:
@@ -124,20 +119,29 @@ jobs:
 
       - name: Merge upstream
         id: merge
+        if: env.UPSTREAM_REF != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git fetch --no-tags "https://github.com/$UPSTREAM.git" "$UPSTREAM_REF:refs/remotes/upstream/$UPSTREAM_REF"
-          # The check job skips pushes with this message prefix; keep them in sync.
-          if git merge --no-edit -m "Merge upstream $UPSTREAM_REF" "upstream/$UPSTREAM_REF"; then exit 0; fi
-          # Only a measured number; upstream's value is fine for a build.
+          before="$(git rev-parse HEAD)"
+          if git merge --no-edit -m "Merge upstream $UPSTREAM_REF" "upstream/$UPSTREAM_REF"; then
+            if [[ "$(git rev-parse HEAD)" != "$before" ]]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          git rev-parse --verify MERGE_HEAD >/dev/null
+          # Re-record the measured budget after taking upstream's file to include the fork's tools.
           budget=apps/server/src/provider/agentContextBudget.json
           if git diff --name-only --diff-filter=U | grep -qx "$budget"; then
-            git checkout --theirs "$budget" && git add "$budget"
+            git checkout --theirs "$budget"
+            git add "$budget"
           fi
           conflicts="$(git diff --name-only --diff-filter=U)"
           if [[ -z "$conflicts" ]]; then
             git commit --no-edit
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git merge --abort
@@ -170,15 +174,60 @@ jobs:
         if: steps.merge.outputs.blocked != 'true'
         run: |
           set -o pipefail
-          run() { echo "::group::$*"; "$@" 2>&1 | tee -a "$RUNNER_TEMP/verify.log"; local s=$?; echo "::endgroup::"; return $s; }
+          run() {
+            echo "::group::$*"
+            (
+              for arg in "$@"; do
+                if [[ "$arg" == *.test.ts && ! -f "$arg" ]]; then
+                  echo "::error::Missing test file: $arg"
+                  exit 1
+                fi
+              done
+              "$@"
+            ) 2>&1 | tee -a "$RUNNER_TEMP/verify.log"
+            local s=$?
+            echo "::endgroup::"
+            return "$s"
+          }
           ok=true
           run vp run typecheck || ok=false
           (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
           (cd packages/client-runtime && run vp test run src/state -t "mute|Mute") || ok=false
           (cd apps/web && run vp test run --project unit src/hooks src/components -t "mute|Mute") || ok=false
-          (cd apps/web && run vp test run --project unit src/components/Sidebar.automations.test.ts src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts src/components/sidebar/automationTasksAtom.test.ts) || ok=false
+          (cd apps/web && run vp test run --project unit src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts) || ok=false
+          (cd packages/client-runtime && run vp test run src/state/automationThreads.test.ts) || ok=false
           (cd packages/shared && run vp test run src/cliRelease.test.ts) || ok=false
+          (cd packages/shared && run vp test run src/spokenReply.test.ts src/composerContextReferences.test.ts) || ok=false
+          (cd packages/contracts && run vp test run src/composerContext.test.ts src/keybindings.test.ts) || ok=false
+          (cd packages/client-runtime && run vp test run \
+            src/voice-input/controller.test.ts \
+            src/voice-input/environment.test.ts \
+            src/voice-input/stream.test.ts \
+            src/voice-input/voiceMode.test.ts) || ok=false
+          (cd apps/mobile && run vp test run \
+            src/features/voice-input/VoiceInputProvider.test.ts \
+            src/features/voice-input/environmentTranscriber.test.ts \
+            src/features/voice-input/lazyVoiceRecorder.test.ts \
+            src/features/voice-input/voiceDestination.test.ts \
+            src/features/voice-input/voiceInputSession.test.ts \
+            src/features/voice-input/voiceRecordingPermission.test.ts \
+            src/features/voice-mode/quietDetector.test.ts \
+            src/features/voice-mode/speech.test.ts \
+            src/features/voice-mode/threadVoiceMode.test.ts) || ok=false
+          (cd apps/server && run vp test run src/orchestration-v2/ProviderTurnStartService.test.ts -t spoken) || ok=false
+          (cd apps/server && run vp test run src/orchestration-v2/ProviderTurnControlService.test.ts) || ok=false
+          (cd apps/web && run vp test run --project unit \
+            src/components/Sidebar.environment.test.ts \
+            src/hooks/useHandleNewThread.test.ts \
+            src/keybindings.test.ts \
+            src/shortcuts/chatRouteCommands.test.ts \
+            src/uiStateStore.test.ts) || ok=false
+          (cd apps/server && run vp test run src/keybindings.test.ts src/provider/AgentContextBudget.test.ts) || ok=false
           if [[ "$ok" != true ]]; then
+            if [[ -z "$UPSTREAM_REF" ]]; then
+              echo "::error::Main fails typecheck or the fork's tests."
+              exit 1
+            fi
             {
               echo "blocked=true"
               echo "reason<<EOF"
@@ -212,7 +261,7 @@ jobs:
           echo "Releasing $major.$minor.$next (upstream $TAG)"
 
       - name: Push main
-        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: steps.merge.outputs.changed == 'true' && steps.verify.outputs.blocked != 'true'
         run: git push origin HEAD:main
 
       - name: Build signed macOS app
@@ -269,14 +318,19 @@ jobs:
           # A leftover tag would make the release point at its commit instead of ours.
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION" 2>/dev/null || true
           shopt -s nullglob
+          upstream_release="latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)"
+          upstream_note="Version follows the $upstream_release."
+          if [[ -n "$UPSTREAM_REF" ]]; then
+            upstream_note="Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") ($upstream_release), plus the fork's changes."
+          fi
           gh release create "v$VERSION" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml \
             --target "$(git rev-parse HEAD)" \
             --title "T3 Code (Joe) $VERSION" \
-            --notes "Based on upstream \`$UPSTREAM_REF\` at $(git rev-parse --short "upstream/$UPSTREAM_REF") (latest upstream release [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)), plus the fork's changes on \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install once from the .dmg (or the .zip if no .dmg is attached); later versions arrive through the app's updater."
+            --notes "$upstream_note Released from \`main\` at $(git rev-parse --short HEAD). macOS Apple Silicon. Install once from the .dmg (or the .zip if no .dmg is attached); later versions arrive through the app's updater."
 
       # The sync token cannot comment on issues; the job token can.
       - name: Close blocked-sync issues
-        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: env.UPSTREAM_REF != '' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
