@@ -235,8 +235,7 @@ export type ResolvedKeybindingRule = typeof ResolvedKeybindingRule.Type;
 
 /** Drops undecodable rules without failing the connection. */
 export const ResolvedKeybindingsConfig = ForwardCompatibleArray(ResolvedKeybindingRule).check(
-  // Inherited sidebar environment defaults sit outside the saved-rule budget.
-  Schema.isMaxLength(MAX_KEYBINDINGS_COUNT + SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.length),
+  Schema.isMaxLength(MAX_KEYBINDINGS_COUNT),
 );
 export type ResolvedKeybindingsConfig = typeof ResolvedKeybindingsConfig.Type;
 

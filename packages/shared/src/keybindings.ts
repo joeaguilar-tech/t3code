@@ -58,6 +58,11 @@ type WhenToken =
   | { type: "rparen" };
 
 export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
+  ...SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.map((command, index) => ({
+    key: `ctrl+shift+${index}`,
+    command,
+    when: "!usagePageOpen",
+  })),
   { key: "mod+b", command: "sidebar.toggle" },
   { key: "f6", command: "workspace.focusNext" },
   { key: "shift+f6", command: "workspace.focusPrevious" },
@@ -143,11 +148,6 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
     key: `mod+${index + 1}`,
     command,
     when: "modelPickerOpen && isDesktop",
-  })),
-  ...SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS.map((command, index) => ({
-    key: `ctrl+shift+${index}`,
-    command,
-    when: "!usagePageOpen",
   })),
   { key: "c", command: "usage.cost", when: "usagePageOpen" },
   { key: "t", command: "usage.tokens", when: "usagePageOpen" },
@@ -399,26 +399,43 @@ export function compileResolvedKeybindingsConfig(
 
 export const DEFAULT_RESOLVED_KEYBINDINGS = compileResolvedKeybindingsConfig(DEFAULT_KEYBINDINGS);
 
-export function mergeWithDefaultKeybindings(
+const UPSTREAM_RESOLVED_DEFAULTS = DEFAULT_RESOLVED_KEYBINDINGS.filter(
+  (binding) => !isForkOnlyKeybindingCommand(binding.command),
+);
+const ENVIRONMENT_RESOLVED_DEFAULTS = DEFAULT_RESOLVED_KEYBINDINGS.filter((binding) =>
+  isForkOnlyKeybindingCommand(binding.command),
+);
+
+function mergeWithUpstreamDefaultKeybindings(
   custom: ResolvedKeybindingsConfig,
 ): ResolvedKeybindingsConfig {
   if (custom.length === 0) {
-    return [...DEFAULT_RESOLVED_KEYBINDINGS];
+    return [...UPSTREAM_RESOLVED_DEFAULTS];
   }
 
-  // The web client can pass an already-resolved snapshot with its inherited environment defaults.
   const overriddenCommands = new Set(custom.map((binding) => binding.command));
-  const retainedDefaults = DEFAULT_RESOLVED_KEYBINDINGS.filter(
+  const retainedDefaults = UPSTREAM_RESOLVED_DEFAULTS.filter(
     (binding) => !overriddenCommands.has(binding.command),
   );
-  const budgetedDefaultCount = retainedDefaults.filter(
-    (binding) => !isForkOnlyKeybindingCommand(binding.command),
-  ).length;
-  let excess = budgetedDefaultCount + custom.length - MAX_KEYBINDINGS_COUNT;
-  const visibleDefaults = retainedDefaults.filter((binding) => {
-    if (excess <= 0 || isForkOnlyKeybindingCommand(binding.command)) return true;
-    excess -= 1;
-    return false;
-  });
-  return [...visibleDefaults, ...custom];
+  const merged = [...retainedDefaults, ...custom];
+
+  if (merged.length <= MAX_KEYBINDINGS_COUNT) {
+    return merged;
+  }
+
+  return merged.slice(-MAX_KEYBINDINGS_COUNT);
+}
+
+export function mergeWithDefaultKeybindings(
+  custom: ResolvedKeybindingsConfig,
+): ResolvedKeybindingsConfig {
+  const resolved = mergeWithUpstreamDefaultKeybindings(custom);
+  const remaining = MAX_KEYBINDINGS_COUNT - resolved.length;
+  if (remaining === 0) return resolved;
+
+  const environmentDefaults = ENVIRONMENT_RESOLVED_DEFAULTS.filter(
+    (binding) => !custom.some((rule) => rule.command === binding.command),
+  ).slice(0, remaining);
+  // Shortcut matching searches from the end, so saved rules win a shared chord.
+  return [...environmentDefaults, ...resolved];
 }
