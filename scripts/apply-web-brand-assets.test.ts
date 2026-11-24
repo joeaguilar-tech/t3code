@@ -5,6 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
+import { resolveWebIconOverrides } from "./lib/brand-assets.ts";
 
 const WEB_ICON_FILENAMES = [
   "apple-touch-icon.png",
@@ -16,6 +17,24 @@ const WEB_ICON_FILENAMES = [
 ];
 
 it.layer(NodeServices.layer)("apply-web-brand-assets", (it) => {
+  it("preserves upstream favicon source paths unless the fork brand is selected", () => {
+    const sourcePaths = (brand: string) =>
+      resolveWebIconOverrides("production", "dist", brand).map((entry) => entry.sourceRelativePath);
+
+    assert.deepStrictEqual(sourcePaths(""), [
+      "assets/prod/t3-black-web-favicon.ico",
+      "assets/prod/t3-black-web-favicon-16x16.png",
+      "assets/prod/t3-black-web-favicon-32x32.png",
+      "assets/prod/t3-black-web-apple-touch-180.png",
+      "assets/prod/t3-black-web-icon-192x192.png",
+      "assets/prod/t3-black-web-icon-512x512.png",
+    ]);
+    assert.deepStrictEqual(
+      sourcePaths("j3").sort(),
+      WEB_ICON_FILENAMES.map((name) => `assets/fork/j3/${name}`),
+    );
+  });
+
   it.effect("copies the icons into an absolute target directory as given", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
