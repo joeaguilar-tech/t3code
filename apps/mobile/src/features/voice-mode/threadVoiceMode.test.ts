@@ -1,3 +1,4 @@
+import { VoiceModeController, type VoiceModeMicrophone } from "@t3tools/client-runtime/voice-input";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   serializeComposerMessageForServer,
@@ -11,6 +12,7 @@ import {
 } from "./threadVoiceMode";
 
 import { createVoiceModeCover } from "./voiceModeCover";
+import { createVoiceModeSessionStore } from "./voiceModeSessionStore";
 
 const firstRun = { id: "first", userMessageId: "original", status: "running" } as const;
 const queuedRun = { id: "next", userMessageId: "queued", status: "queued" } as const;
@@ -123,7 +125,7 @@ describe("voice mode covering screens", () => {
       "own",
     );
     expect(cover.placement).toBe("floating");
-    const control = { microphoneOpen: true, toggleMute, end };
+    const control = { phase: "listening", microphoneOpen: true, toggleMute, end } as const;
     expect(cover.control(control)).toBe(control);
     cover.control(control).toggleMute();
     expect(toggleMute).toHaveBeenCalledOnce();
@@ -145,8 +147,77 @@ describe("voice mode covering screens", () => {
     expect(cover.placement).toBe("inline");
     expect(cover.speechSuppressed).toBe(false);
     expect(cover.captureMuted).toBe(true);
-    expect(cover.control({ microphoneOpen: true }).microphoneOpen).toBe(false);
+    expect(cover.control({ phase: "listening", microphoneOpen: true })).toMatchObject({
+      phase: "muted",
+      microphoneOpen: false,
+    });
     cover.unmute();
     expect(cover.captureMuted).toBe(false);
   });
+});
+
+it.each([
+  { capture: "finished", finished: true, expected: [["queue a test run"]] },
+  { capture: "in progress", finished: false, expected: [] },
+])("mutes on a sheet when speech is $capture", async ({ finished, expected }) => {
+  const cover = createVoiceModeCover();
+  const sendSpokenMessage = vi.fn(async (_text: string) => "sent");
+  const microphone = {
+    open: vi.fn<VoiceModeMicrophone["open"]>(),
+    finish: vi.fn(),
+    cancel: vi.fn(),
+  };
+  const speak = vi.fn(async (_text: string) => {});
+  const stopSpeaking = vi.fn();
+  const controller = new VoiceModeController({
+    microphone,
+    speech: {
+      speak: (text) => (cover.speechSuppressed ? Promise.resolve() : speak(text)),
+      stopSpeaking,
+    },
+    sendSpokenMessage,
+    timer: { schedule: () => () => {} },
+    toSpeech: (text) => text,
+  });
+
+  controller.start();
+  controller.noteSpeechActivity();
+  if (finished) controller.tapToSend();
+  cover.update(
+    [
+      { key: "own", name: "Thread" },
+      { key: "queue", name: "ThreadQueue" },
+    ],
+    "own",
+  );
+  cover.silence(controller, stopSpeaking);
+
+  await microphone.open.mock.calls[0]?.[0]("queue a test run");
+  expect(sendSpokenMessage.mock.calls).toEqual(expected);
+  await controller.handleRunEvent({
+    type: "finished",
+    finalMessage: "Reply",
+    handledMessageIds: ["sent"],
+  });
+  expect(speak).not.toHaveBeenCalled();
+  expect(controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+  expect(microphone.cancel).toHaveBeenCalledTimes(finished ? 0 : 1);
+});
+
+it("reserves the live session and its floating control for one owner", () => {
+  const sessions = createVoiceModeSessionStore();
+  const control = { microphoneOpen: false, toggleMute: vi.fn(), end: vi.fn() };
+
+  expect(sessions.acquire("thread")).toBe(true);
+  expect(sessions.acquire("file")).toBe(false);
+  expect(sessions.getOwner()).toBe("thread");
+  sessions.publish("thread", control);
+  sessions.publish("file", null);
+  sessions.release("file");
+  expect(sessions.getControl()).toBe(control);
+  sessions.release("thread");
+  expect(sessions.getControl()).toBeNull();
+  expect(sessions.acquire("file")).toBe(true);
+  sessions.release("thread");
+  expect(sessions.getOwner()).toBe("file");
 });

@@ -73,6 +73,7 @@ export function createVoiceModeCover() {
     control<T extends { microphoneOpen: boolean }>(control: T): T {
       return captureMuted ? { ...control, microphoneOpen: false } : control;
     },
+    silence(_controller: { currentState: { manuallyMuted: boolean }; toggleMute: () => void }, _stopSpeaking: () => void) {},
     unmute() {
       if (placement === "inline" || placement === "floating") captureMuted = false;
     },
