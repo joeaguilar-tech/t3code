@@ -138,7 +138,7 @@ export class VoiceModeController {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();
     const window = this.microphoneWindow;
-    this.manuallyMuted = !this.manuallyMuted && (window !== undefined || this.canOpenMicrophone());
+    this.manuallyMuted = this.state.microphoneOpen;
     if (this.manuallyMuted && window?.protection && !window.finishing) {
       this.cancelTurn();
       return;
@@ -183,6 +183,7 @@ export class VoiceModeController {
         if (this.microphoneWindow === window) this.cancelTurn();
       },
     );
+    this.refresh();
   }
 
   private protectWindow(window: MicrophoneWindow): void {
@@ -435,7 +436,7 @@ export class VoiceModeController {
       this.closeMicrophone();
     }
 
-    const microphoneOpen = this.microphoneWindow !== undefined && canOpenMicrophone;
+    const microphoneOpen = this.microphoneWindow !== undefined && !this.microphoneWindow.finishing;
     const playing = this.playback !== undefined;
     const phase = this.phase(microphoneOpen);
     if (

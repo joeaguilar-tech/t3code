@@ -42,7 +42,7 @@ export function ThreadVoiceModeToolbar({ voiceMode }: { voiceMode: ThreadVoiceMo
         {status}
       </Text>
       <VoiceModeMuteButton microphoneOpen={state.microphoneOpen} onPress={voiceMode.toggleMute} />
-      {state.microphoneOpen && !transcribing ? (
+      {state.microphoneOpen ? (
         <>
           <ComposerActionButton
             accessibilityLabel="Discard this recording"
