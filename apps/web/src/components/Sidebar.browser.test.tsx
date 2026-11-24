@@ -393,7 +393,7 @@ describe("sidebar environment UI", () => {
       await expect
         .element(screen.getByRole("button", { name: /^Automations/ }))
         .not.toBeInTheDocument();
-      await userEvent.click(screen.getByRole("combobox", { name: "Filter threads by project" }));
+      await userEvent.click(screen.getByRole("combobox", { name: /^Projects/ }));
       await expect.element(page.getByRole("option", { name: /local-project/ })).toBeVisible();
       await expect
         .element(page.getByRole("option", { name: /remote-project/ }))
