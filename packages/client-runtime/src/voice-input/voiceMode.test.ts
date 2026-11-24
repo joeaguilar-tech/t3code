@@ -267,14 +267,15 @@ describe("VoiceModeController", () => {
     },
   );
 
-  it("keeps a post-reply window open once it hears speech", async () => {
+  it("sends a long utterance from a post-reply window that heard speech", async () => {
     const h = setup();
     await h.say("first");
     await h.finish("id:first");
-    const controller: VoiceModeController & { noteSpeechActivity?: () => void } = h.controller;
-    controller.noteSpeechActivity?.();
+    h.controller.noteSpeechActivity();
     await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
-    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    await h.elapse(15_000);
+    await h.say("long follow-up");
+    expect(h.send.mock.calls).toEqual([["first"], ["long follow-up"]]);
     expect(h.microphone.cancel).not.toHaveBeenCalled();
   });
 
@@ -311,14 +312,14 @@ describe("VoiceModeController", () => {
     expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
   });
 
-  it.each(["speech activity", "tap-to-send"])(
-    "releases a held reply on timeout after %s",
+  it.each(["after speech activity", "without speech activity"])(
+    "releases a held reply on transcription timeout when tap-to-send is used %s",
     async (activity) => {
       const h = setup(false);
       await h.say("first");
       const transcript = h.currentTranscript();
-      if (activity === "speech activity") h.controller.noteSpeechActivity();
-      else h.controller.tapToSend();
+      if (activity === "after speech activity") h.controller.noteSpeechActivity();
+      h.controller.tapToSend();
       const finished = h.finish("id:first");
       h.microphone.cancel.mockClear();
 
@@ -331,6 +332,26 @@ describe("VoiceModeController", () => {
       expect(h.controller.currentState.microphoneOpen).toBe(true);
     },
   );
+
+  it("discards heard speech and releases held playback on manual mute", async () => {
+    const h = setup(false);
+    await h.say("first");
+    const transcript = h.currentTranscript();
+    h.controller.noteSpeechActivity();
+    const finished = h.finish("id:first");
+
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    h.controller.toggleMute();
+
+    expect(h.microphone.cancel).toHaveBeenCalledOnce();
+    expect(h.microphone.finish).not.toHaveBeenCalled();
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+    await finished;
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
+    await transcript?.("discarded");
+    expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+  });
 
   it("reports the microphone closed when manually muted during transcription", async () => {
     const h = setup();
