@@ -93,7 +93,7 @@ export function agentActivityWidgetTimeline(
   const { aggregate } = source;
   const props: AgentActivityProps = {
     text: agentActivityText(Math.max(aggregate.activeCount, aggregate.activities.length), resolve),
-    title: aggregate.title,
+    title: MOBILE_PRODUCT_NAME,
     subtitle: aggregate.subtitle,
     activeCount: aggregate.activeCount,
     updatedAt: aggregate.updatedAt,

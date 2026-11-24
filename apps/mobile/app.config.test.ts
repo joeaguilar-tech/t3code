@@ -173,6 +173,8 @@ it.each([
 it.each(["development", "preview", "production"])(
   "brands the $0 art and permissions while preserving mobile identity",
   async (variant) => {
+    vi.stubEnv("T3CODE_IOS_DISPLAY_NAME", undefined);
+    vi.stubEnv("T3CODE_IOS_PERSONAL_TEAM", undefined);
     vi.stubEnv("T3CODE_IOS_BUNDLE_ID", "tech.example.mobile");
     vi.stubEnv("T3CODE_IOS_APPLE_TEAM_ID", "TEAM000001");
     vi.stubEnv("T3CODE_EAS_PROJECT_ID", "fork-project");
@@ -214,11 +216,24 @@ it.each(["development", "preview", "production"])(
       camera: "Allow J3 Code to access your camera so you can scan pairing QR codes.",
       picker: "Allow J3 Code to use your microphone for voice input.",
     });
-    expect(branded.ios?.infoPlist?.CFBundleDisplayName).toBe(
-      upstream.ios?.infoPlist?.CFBundleDisplayName,
-    );
+    expect(branded.ios?.infoPlist?.CFBundleDisplayName).toBe("J3 Code");
+    expect(upstream.ios?.infoPlist?.CFBundleDisplayName).toBeUndefined();
+    expect(pluginOptions(branded, "./plugins/withShareExtensionDisplayName.cjs")).toEqual({
+      displayName: "J3 Code",
+    });
+    expect(upstream.plugins).toContain("./plugins/withShareExtensionDisplayName.cjs");
+    expect(pluginOptions(branded, "./plugins/withAndroidLauncherLabel.cjs")).toEqual({
+      displayName: "J3 Code",
+    });
+    expect(pluginOptions(upstream, "./plugins/withAndroidLauncherLabel.cjs")).toBeUndefined();
   },
 );
+
+it("preserves the explicit iOS home-screen label on a branded build", async () => {
+  vi.stubEnv("T3CODE_IOS_DISPLAY_NAME", " Custom Label ");
+  const config = await loadConfig("production", "j3");
+  expect(config.ios?.infoPlist?.CFBundleDisplayName).toBe("Custom Label");
+});
 
 it.each([
   ["development", "T3 Code Dev"],
@@ -229,7 +244,7 @@ it.each([
   vi.stubEnv("T3CODE_IOS_DISPLAY_NAME", undefined);
   const config = await loadConfig(variant, "j3");
   const serialized = JSON.stringify(config, function (key, value) {
-    // Expo uses the root name for native targets and extension identity.
+    // Expo uses the root name for native targets. Display names come from plist and label overrides.
     if (this === config && key === "name" && value === nativeName) return undefined;
     // This prompt describes the upstream servers the app can connect to.
     if (

@@ -48,6 +48,8 @@ await Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const svg = yield* fs.readFileString(source);
   const mark = svg.replace(/^[ \t]*<rect[^>]*\/>\n/mu, "");
+  // The 70-unit round strokes span x=147–828 and y=283–741. Pad x to fit the 3:2 widget frame.
+  const widgetMark = mark.replace('viewBox="0 0 1024 1024"', 'viewBox="144 283 687 458"');
   const renderAndroidLayer = (art: string) =>
     sharp(Buffer.from(art))
       .resize(336, 336)
@@ -55,7 +57,7 @@ await Effect.gen(function* () {
       .png();
   yield* Effect.all(
     [
-      fs.writeFileString(mobile.widgetMarkSvg, mark),
+      fs.writeFileString(mobile.widgetMarkSvg, widgetMark),
       renderAsset(macIconPng, () => render(1024).toFile(macIconPng)),
       renderAsset(mobile.androidForegroundPng, () =>
         renderAndroidLayer(mark).toFile(mobile.androidForegroundPng),
