@@ -55,7 +55,7 @@ export function ThreadVoiceModeToolbar({ voiceMode }: { voiceMode: ThreadVoiceMo
             onPress={voiceMode.tapToSend}
           />
         </>
-      ) : state.phase === "speaking" ? (
+      ) : state.playing ? (
         <ComposerActionButton
           accessibilityLabel="Interrupt speech"
           icon="pause"
