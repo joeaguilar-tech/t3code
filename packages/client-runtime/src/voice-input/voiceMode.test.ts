@@ -548,6 +548,9 @@ describe("VoiceModeController", () => {
     expect(h.microphone.cancel).not.toHaveBeenCalled();
     await h.say("first");
     expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
   });
 
   it.each(["older settles first", "newer settles first"])(
