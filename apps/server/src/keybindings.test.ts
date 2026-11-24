@@ -137,6 +137,51 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }),
   );
 
+  const environmentDefaults = SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS.filter((rule) =>
+    isForkOnlyKeybindingCommand(rule.command),
+  );
+  const upstreamDefaultCount =
+    SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS.length - environmentDefaults.length;
+
+  it.effect.each([
+    {
+      name: "plenty of room",
+      savedCount: 0,
+      environmentCount: 10,
+      resolvedCount: upstreamDefaultCount + 10,
+    },
+    {
+      name: "partial room",
+      savedCount: 253 - upstreamDefaultCount,
+      environmentCount: 3,
+      resolvedCount: 256,
+    },
+    { name: "above the cap", savedCount: 257, environmentCount: 0, resolvedCount: 256 },
+  ])(
+    "resolves environment defaults with $name",
+    ({ savedCount, environmentCount, resolvedCount }) =>
+      Effect.sync(() => {
+        const saved = Array.from({ length: savedCount }, (_, index) => {
+          const rule = SharedKeybindings.compileResolvedKeybindingRule({
+            key: "f1",
+            command: `script.filler-${index}.run`,
+          });
+          if (!rule) throw new Error("Invalid filler shortcut");
+          return rule;
+        });
+        const resolved = SharedKeybindings.mergeWithDefaultKeybindings(saved);
+        assert.lengthOf(resolved, resolvedCount);
+        assert.deepEqual(
+          resolved.filter((rule) => isForkOnlyKeybindingCommand(rule.command)),
+          environmentDefaults.slice(0, environmentCount),
+        );
+        assert.deepEqual(
+          resolved.slice(resolved.length - Math.min(savedCount, 256)),
+          saved.slice(-256),
+        );
+      }),
+  );
+
   it.effect("bootstraps default keybindings when config file is missing", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -366,13 +411,11 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.isFalse(yield* hasModEnter);
 
       const snapshot = yield* keybindings.getSnapshot;
-      const environmentDefaults = SharedKeybindings.DEFAULT_RESOLVED_KEYBINDINGS.filter((rule) =>
-        isForkOnlyKeybindingCommand(rule.command),
+      assert.lengthOf(snapshot.keybindings, 256);
+      assert.deepEqual(
+        snapshot.keybindings,
+        SharedKeybindings.compileResolvedKeybindingsConfig([existing, ...fillers]),
       );
-      assert.deepEqual(snapshot.keybindings, [
-        ...environmentDefaults,
-        ...SharedKeybindings.compileResolvedKeybindingsConfig([existing, ...fillers]),
-      ]);
       const decoded = yield* decodeResolvedKeybindingsConfig(snapshot.keybindings);
       assert.deepEqual(decoded, snapshot.keybindings);
 

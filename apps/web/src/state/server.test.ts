@@ -1,10 +1,5 @@
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import {
-  EnvironmentId,
-  type KeybindingRule,
-  MAX_KEYBINDINGS_COUNT,
-  type ServerConfig,
-} from "@t3tools/contracts";
+import { EnvironmentId, type KeybindingRule, type ServerConfig } from "@t3tools/contracts";
 import {
   compileResolvedKeybindingsConfig,
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -117,13 +112,11 @@ describe("createShortcutKeybindingsAtom", () => {
   it("preserves all shortcuts from a full resolved server config", () => {
     const fullConfig = config([
       ...SWAPPED,
-      ...Array.from(
-        { length: MAX_KEYBINDINGS_COUNT - DEFAULT_RESOLVED_KEYBINDINGS.length + 12 },
-        (_, index) => ({
-          key: "f1",
-          command: `script.filler-${index}.run` as const,
-        }),
-      ),
+      { key: "ctrl+shift+1", command: "chat.newLocal" },
+      ...Array.from({ length: 257 - DEFAULT_RESOLVED_KEYBINDINGS.length }, (_, index) => ({
+        key: "f1",
+        command: `script.filler-${index}.run` as const,
+      })),
     ]);
     const keybindings = mergeWithDefaultKeybindings(fullConfig.keybindings);
     const harness = makeHarness({
@@ -132,7 +125,15 @@ describe("createShortcutKeybindingsAtom", () => {
     });
 
     expect(harness.cmdN()).toBe("chat.newLocal");
+    expect(keybindings).toHaveLength(256);
     expect(harness.keybindings()).toEqual(keybindings);
+    expect(
+      resolveShortcutCommand(
+        { key: "1", metaKey: false, ctrlKey: true, shiftKey: true, altKey: false },
+        harness.keybindings(),
+        { platform: "Linux" },
+      ),
+    ).toBe("chat.newLocal");
   });
 
   it("uses the primary config or defaults until the primary is removed", () => {
