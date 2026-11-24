@@ -56,6 +56,10 @@ describe("agentActivityWidgetTimeline", () => {
     });
     const { agentActivityWidgetTimeline } = await import("./agentActivityWidgetTimeline");
     expect(agentActivityWidgetTimeline({ kind: "loading" }, now)[0]?.props.title).toBe(title);
+    expect(
+      agentActivityWidgetTimeline({ kind: "snapshot", aggregate: aggregate([]) }, now)[0]?.props
+        .title,
+    ).toBe(title);
   });
 
   it("marks unfinished rows out of date once the widget can no longer vouch for them", () => {
