@@ -2,6 +2,7 @@ import { buildSpokenSend } from "../features/voice-mode/threadVoiceMode";
 import { useComposerAttachmentActions } from "./use-composer-attachment-actions";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import * as Dialog from "../components/ui/Dialog";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
 import { readEnvironmentScope } from "./session";
@@ -31,6 +32,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   MessageId,
+  OrchestrationV2DispatchCommandError,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type EnvironmentId,
   type ModelSelection,
@@ -140,6 +142,8 @@ import { dispatchingQueuedMessageIdsAtom, useThreadOutboxMessages } from "./use-
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
 
+const isDispatchCommandError = Schema.is(OrchestrationV2DispatchCommandError);
+
 const EMPTY_QUEUE_WORKFLOW_ATOM = Atom.make<null>(null).pipe(
   Atom.withLabel("mobile-thread-queue-workflow:empty"),
 );
@@ -247,6 +251,7 @@ export function useThreadComposerState(input: {
   const uploadThreadFeedback = useAtomCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
+  const startSpokenTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const editQueuedRun = useAtomCommand(threadEnvironment.editQueuedRun, {
     label: "edit queued message",
     reportFailure: false,
@@ -454,6 +459,9 @@ export function useThreadComposerState(input: {
     : null;
 
   const activeThreadBusy = threadRuntimeIsActive(selectedThreadRuntime);
+  const setupRunning = [selectedThreadActivityRun?.status, selectedThreadRuntime?.status].some(
+    (status) => status === "preparing" || status === "starting",
+  );
   const resumeCompactionTokens = (selection: ModelSelection | null, text: string, now: string) =>
     selectedEnvironmentRuntime?.connectionState === "connected" &&
     selectedThreadProjection !== null &&
@@ -874,9 +882,6 @@ export function useThreadComposerState(input: {
       alternateModifier: followUpOverride !== undefined && followUpOverride !== activeTurnDefault,
       activeTurnDefault,
     });
-    const setupRunning = [selectedThreadActivityRun?.status, selectedThreadRuntime?.status].some(
-      (status) => status === "preparing" || status === "starting",
-    );
     const followUpDispatchMode = setupRunning
       ? "queue"
       : followUpAction === "auto"
@@ -947,26 +952,76 @@ export function useThreadComposerState(input: {
     }
     const metadata = makeQueuedMessageMetadata();
     const messageId = MessageId.make(metadata.messageId);
-    const settingUp = [selectedThreadActivityRun?.status, selectedThreadRuntime?.status].some(
-      (status) => status === "preparing" || status === "starting",
-    );
-    await enqueueThreadOutboxMessage({
-      environmentId: selectedThreadShell.environmentId,
-      threadId: selectedThreadShell.id,
-      messageId,
+    const spoken = buildSpokenSend({
+      text,
+      running: activeThreadBusy || setupRunning,
+      canSteer: canSteerActiveTurn && !setupRunning,
+      followUpBehavior,
+    });
+    const { environmentId, id: threadId } = selectedThreadShell;
+    const settings = {
+      threadId,
       commandId: CommandId.make(metadata.commandId),
-      attachments: [],
       modelSelection,
       runtimeMode,
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
-      ...buildSpokenSend({
-        text,
-        running: activeThreadBusy || settingUp,
-        canSteer: canSteerActiveTurn && !settingUp,
-        followUpBehavior,
-      }),
-    });
+    };
+    if (spoken.dispatchMode !== "steer") {
+      await enqueueThreadOutboxMessage({
+        ...settings,
+        environmentId,
+        messageId,
+        attachments: [],
+        ...spoken,
+      });
+      return messageId;
+    }
+
+    // Voice needs the server's answer to recover from Stop before resolving the transcript.
+    const threadKey = scopedThreadKey(environmentId, threadId);
+    clearThreadComposerError(threadKey);
+    const message = {
+      messageId,
+      role: "user" as const,
+      text,
+      context: spoken.context,
+      attachments: [],
+    };
+    const titleSeed = deriveThreadTitleSeed(message, resolve);
+    const dispatch = (dispatchMode: "steer" | "start", commandId: CommandId) =>
+      startSpokenTurn({
+        environmentId,
+        input: {
+          ...settings,
+          commandId,
+          creationSource: "mobile",
+          dispatchMode,
+          message,
+          titleSeed,
+        },
+      });
+    let result = await dispatch("steer", settings.commandId);
+    if (result._tag === "Failure") {
+      const error = squashAtomCommandFailure(result);
+      if (
+        isDispatchCommandError(error) &&
+        error.commandType === "message.dispatch" &&
+        /^Target run \S+ is (?:stopping|completed|interrupted|failed|cancelled|rolled_back) and cannot be steered\.$/.test(
+          error.detail ?? error.message,
+        )
+      ) {
+        result = await dispatch("start", CommandId.make(uuidv4()));
+      }
+    }
+    if (result._tag === "Failure") {
+      const error = squashAtomCommandFailure(result);
+      setThreadComposerError(
+        threadKey,
+        errorDisplayMessage(error, resolve) ?? resolve(msg("The message could not be sent.")),
+      );
+      throw error;
+    }
     return messageId;
   };
 

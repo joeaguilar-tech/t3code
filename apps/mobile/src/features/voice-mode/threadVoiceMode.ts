@@ -1,4 +1,5 @@
 import type { OrchestrationV2RunStatus } from "@t3tools/contracts";
+import { resolveComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
 import type { VoiceModeRunEvent } from "@t3tools/client-runtime/voice-input";
 import { DEFAULT_FOLLOW_UP_BEHAVIOR, type FollowUpBehavior } from "../../lib/followUpBehavior";
 
@@ -78,16 +79,16 @@ export function buildSpokenSend(input: {
   readonly canSteer: boolean;
   readonly followUpBehavior?: FollowUpBehavior;
 }) {
-  const followUp = input.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR;
+  const dispatchMode = resolveComposerDispatchMode({
+    running: input.running,
+    canSteer: input.canSteer,
+    alternateModifier: false,
+    activeTurnDefault: input.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR,
+  });
   return {
     text: input.text,
     context: { version: 1 as const, records: [], spoken: true as const },
-    ...(input.running
-      ? {
-          dispatchMode:
-            input.canSteer && followUp === "steer" ? ("auto" as const) : ("queue" as const),
-        }
-      : {}),
+    ...(dispatchMode === "auto" ? {} : { dispatchMode }),
   };
 }
 

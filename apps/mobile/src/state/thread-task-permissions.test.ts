@@ -53,6 +53,7 @@ const state = vi.hoisted(() => ({
   pendingRequests: { approvals: [], userInputs: [] } as PendingThreadRequests,
   enqueue: vi.fn(async () => undefined),
   startTurn: vi.fn(),
+  followUpBehavior: "steer" as "steer" | "queue",
   canPromoteToSteer: false,
   freshPending: false,
   compactModel: null as string | null,
@@ -161,7 +162,12 @@ vi.mock("./preferences", async () => {
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 vi.mock("@effect/atom-react", async () => {
   const { appAtomRegistry } = await import("./atom-registry");
-  return { useAtomValue: <A>(atom: Atom.Atom<A>) => appAtomRegistry.get(atom) };
+  return {
+    useAtomValue: <A>(atom: Atom.Atom<A>) =>
+      atom === mobilePreferencesAtom
+        ? (AsyncResult.success({ followUpBehavior: state.followUpBehavior }) as A)
+        : appAtomRegistry.get(atom),
+  };
 });
 vi.mock("./entities", () => ({ useServerConfigs: () => new Map() }));
 vi.mock("./session", () => ({
@@ -260,7 +266,6 @@ vi.mock("../lib/copyTextWithHaptic", () => ({ copyTextWithHaptic: vi.fn() }));
 vi.mock("./use-remote-environment-registry", () => ({ setPendingConnectionError: vi.fn() }));
 
 import { Alert } from "react-native";
-import { appAtomRegistry } from "./atom-registry";
 import { mobilePreferencesAtom } from "./preferences";
 import { useThreadComposerState } from "./use-thread-composer-state";
 import { useSelectedThreadRequests } from "./use-selected-thread-requests";
@@ -287,7 +292,7 @@ beforeEach(() => {
   state.thread.latestRun = null;
   state.thread.runtime = null;
   state.canPromoteToSteer = false;
-  appAtomRegistry.set(mobilePreferencesAtom, AsyncResult.success({ followUpBehavior: "steer" }));
+  state.followUpBehavior = "steer";
   state.projection = null;
   state.serverConfig = {
     providers: [{ instanceId: "codex", driver: "codex", enabled: true }],
@@ -325,10 +330,7 @@ describe("spoken composer sends", () => {
     state.pendingRequests = { approvals: [], userInputs: [] };
     state.thread.runtime = { status: "running", activeRunId: "run" };
     state.canPromoteToSteer = true;
-    appAtomRegistry.set(
-      mobilePreferencesAtom,
-      AsyncResult.success({ followUpBehavior: queue ? "queue" : "steer" }),
-    );
+    state.followUpBehavior = queue ? "queue" : "steer";
     if (status !== null) {
       const detail = `Target run run is ${status} and cannot be steered.`;
       state.startTurn
