@@ -1,3 +1,4 @@
+import type { acquireAudioSession } from "../../lib/audioSession";
 import {
   VOICE_RECORDING_LIMIT_SECONDS,
   VoiceInputController,
@@ -6,6 +7,7 @@ import {
   type VoiceInputControllerDependencies,
   type VoiceInputPhase,
   type VoiceInputState,
+  type VoiceRecorderStatus,
 } from "@t3tools/client-runtime/voice-input";
 
 import {
@@ -16,10 +18,14 @@ import {
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0);
 
+type RecordingAudioToken = ReturnType<typeof acquireAudioSession>;
+
 export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
   readonly voiceMode?: boolean;
+  readonly onAudioSessionAcquired?: () => void;
+  readonly retainAudioSession?: (token: RecordingAudioToken) => boolean;
   readonly onMeteringSample?: (level: number) => void;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
@@ -40,9 +46,13 @@ export type VoiceRecordingSample = {
 
 export type VoiceInputSessionDependencies = Omit<
   VoiceInputControllerDependencies,
-  "readDraft" | "commitDraft" | "onStateChange" | "configureRecording"
+  "readDraft" | "commitDraft" | "onStateChange" | "configureRecording" | "releaseRecording"
 > & {
-  readonly configureRecording: (kind: "recording" | "voice-mode") => Promise<void>;
+  readonly configureRecording: (
+    kind: "recording" | "voice-mode",
+    onAcquired?: () => void,
+  ) => Promise<void>;
+  readonly releaseRecording: (retain?: VoiceInputTarget["retainAudioSession"]) => Promise<void>;
   /** Reads the live recorder, or null when it is not capturing. */
   readonly sampleRecording: () => VoiceRecordingSample | null;
   /** Levels change every metering tick, so they bypass React state. */
@@ -86,6 +96,7 @@ export class VoiceInputSession {
   private readonly listeners = new Set<() => void>();
   private audioLevels = SILENT_LEVELS;
   private releaseKeepAwake: (() => void) | null = null;
+  private nativeRecordingOperation: Promise<void> | undefined;
   private meteringInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(dependencies: VoiceInputSessionDependencies) {
@@ -93,7 +104,11 @@ export class VoiceInputSession {
     this.controller = new VoiceInputController({
       ...dependencies,
       configureRecording: () =>
-        dependencies.configureRecording(this.target?.voiceMode ? "voice-mode" : "recording"),
+        dependencies.configureRecording(
+          this.target?.voiceMode ? "voice-mode" : "recording",
+          this.target?.onAudioSessionAcquired,
+        ),
+      releaseRecording: () => dependencies.releaseRecording(this.target?.retainAudioSession),
       onStateChange: (state) => this.handleStateChange(state),
       // The target's selection is fixed at start, so a draft changed since refuses the transcript.
       readDraft: () => {
@@ -101,6 +116,27 @@ export class VoiceInputSession {
         return draft?.text === this.startText ? draft : null;
       },
       commitDraft: (text, selection) => this.target?.commitDraft(text, selection),
+    });
+  }
+
+  get nativeRecordingSettled(): Promise<void> | undefined {
+    return this.nativeRecordingOperation;
+  }
+
+  handleRecorderStatus(status: VoiceRecorderStatus): void {
+    this.trackNativeRecordingOperation(this.controller.handleRecorderStatus(status));
+  }
+
+  appMovedToBackground(): void {
+    this.trackNativeRecordingOperation(this.controller.appMovedToBackground());
+  }
+
+  private trackNativeRecordingOperation(operation: Promise<void> | void): void {
+    if (!operation) return;
+    const settled = operation.catch(() => {});
+    this.nativeRecordingOperation = settled;
+    void settled.then(() => {
+      if (this.nativeRecordingOperation === settled) this.nativeRecordingOperation = undefined;
     });
   }
 

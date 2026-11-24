@@ -1,3 +1,5 @@
+import { voiceModeAutoMute } from "../voice-mode/threadVoiceMode";
+import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -276,6 +278,21 @@ export function SettingsVoiceRouteScreen() {
         contentContainerClassName="gap-3 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        {Platform.OS === "ios" ? (
+          <SettingsSection title="Voice mode">
+            <SettingsSwitchRow
+              label="Auto-mute"
+              subtitle="Mute while the agent works and after a short silence following its reply."
+              value={voiceModeAutoMute(
+                AsyncResult.isSuccess(preferencesResult)
+                  ? preferencesResult.value.voiceModeAutoMute
+                  : undefined,
+              )}
+              disabled={!ready}
+              onValueChange={(value) => savePreferences({ voiceModeAutoMute: value })}
+            />
+          </SettingsSection>
+        ) : null}
         <SettingsSection title="Transcribe on">
           <ListChoiceRow
             label="This device"

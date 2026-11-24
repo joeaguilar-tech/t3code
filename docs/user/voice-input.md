@@ -159,3 +159,11 @@ same environment, language, and dictionary as the composer, but skips transcript
 cleanup even when it is on, so you see what the model heard. Browser recording
 needs HTTPS or localhost and microphone permission; for a remote server over
 plain HTTP, use the desktop app.
+
+## Voice mode
+
+On an iPhone running your own build of T3 Code, open a thread and tap the waveform button beside dictation. Speak naturally. A short pause sends your message, or you can tap **Send recording now**. The app reads a short reply aloud and keeps the full answer, including code and details, in the thread. Tap **Interrupt speech** to speak again, or **Discard this recording** to start over.
+
+Auto-mute is on by default. The microphone mutes while the agent works and opens briefly after the reply. Tap the microphone to mute or unmute it yourself, or change **Auto-mute** in **Settings → Voice**. Respond to approvals and questions on screen.
+
+Tap **End voice mode** to stop. Leaving the thread or putting the app in the background also ends the session.

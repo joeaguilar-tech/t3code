@@ -1,3 +1,5 @@
+import { ThreadVoiceModeToolbar } from "../voice-mode/ThreadVoiceModeToolbar";
+import type { ThreadVoiceMode } from "../voice-mode/useVoiceMode";
 import { ChildThreadApprovals } from "./ChildThreadApprovals";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
 import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
@@ -275,6 +277,7 @@ export interface ThreadDetailScreenProps {
   readonly queuedRunEdit: QueuedRunEdit | null;
   readonly composerDraftKey: string | null;
   readonly followUpBehavior: FollowUpBehavior;
+  readonly voiceMode?: ThreadVoiceMode;
   readonly canSteerActiveTurn: boolean;
   readonly isSavingQueuedEdit: boolean;
   readonly onCancelQueuedRunEdit: () => void;
@@ -1749,6 +1752,9 @@ function ThreadDetailBody(
                         />
                       </Animated.View>
                     ) : null}
+                    {props.voiceMode ? (
+                      <ThreadVoiceModeToolbar voiceMode={props.voiceMode} />
+                    ) : null}
                     {props.activePendingApproval || props.activePendingUserInput ? (
                       <Animated.View
                         className="shrink-0 gap-3 px-4 pb-3"
@@ -1908,6 +1914,7 @@ function ThreadDetailBody(
                             : props.followUpBehavior
                         }
                         canSteerActiveTurn={props.canSteerActiveTurn}
+                        voiceMode={props.voiceMode}
                         hidden={composerSlotHidden}
                         queuedEdit={
                           props.queuedRunEdit === null

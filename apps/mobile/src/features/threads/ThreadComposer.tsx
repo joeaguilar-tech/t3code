@@ -1,3 +1,4 @@
+import type { ThreadVoiceMode } from "../voice-mode/useVoiceMode";
 import { useSidebarWorkspaceTabs } from "../layout/workspace/useSystemWorkspaceTabBar";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
@@ -288,6 +289,7 @@ export interface ThreadComposerProps {
   } | null;
   readonly followUpBehavior: FollowUpBehavior;
   readonly canSteerActiveTurn: boolean;
+  readonly voiceMode?: ThreadVoiceMode;
   readonly hidden: boolean;
   readonly editorRef?: RefObject<ComposerEditorHandle | null>;
   readonly onChangeDraftMessage: (value: string) => void;
@@ -1206,11 +1208,21 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 <ComposerDictationStartAction
                   size={usesLargeControls ? "large" : "regular"}
                   state={voiceInput.state}
-                  isAvailable={voiceInput.isAvailable}
+                  isAvailable={voiceInput.isAvailable && !props.voiceMode?.state}
                   disabled={isSubmissionLocked}
                   onStart={voiceInput.start}
                   onCancel={voiceInput.cancel}
                 />
+                {props.voiceMode?.available && props.voiceMode.state === null ? (
+                  <ComposerActionButton
+                    accessibilityLabel="Start voice mode"
+                    icon="waveform"
+                    disabled={
+                      !props.voiceMode.canStart || isSubmissionLocked || queuedEdit !== null
+                    }
+                    onPress={props.voiceMode.start}
+                  />
+                ) : null}
                 {showStopAction ? (
                   <ComposerActionButton
                     size={usesLargeControls ? "large" : "regular"}
