@@ -332,6 +332,12 @@ describe("spoken composer sends", () => {
     },
     { scenario: "the socket is lost", rejection: "socket", retryFails: false, queue: false },
     { scenario: "follow-ups are queued", rejection: null, retryFails: false, queue: true },
+    {
+      scenario: "a queued follow-up fails to save",
+      rejection: "outbox",
+      retryFails: false,
+      queue: true,
+    },
   ])("handles follow-ups when $scenario", async ({ rejection, retryFails, queue }) => {
     state.grantedEnvironments.add("secondary");
     state.pendingRequests = { approvals: [], userInputs: [] };
@@ -339,8 +345,11 @@ describe("spoken composer sends", () => {
     state.canPromoteToSteer = true;
     state.followUpBehavior = queue ? "queue" : "steer";
     const retries = rejection === "stopping";
-    const sendFails = retryFails || rejection === "other" || rejection === "socket";
-    if (rejection === "socket") {
+    const sendFails =
+      retryFails || rejection === "other" || rejection === "socket" || rejection === "outbox";
+    if (rejection === "outbox") {
+      state.enqueue.mockRejectedValueOnce(new Error("disk full"));
+    } else if (rejection === "socket") {
       state.startTurn.mockResolvedValueOnce(
         AsyncResult.failure(Cause.fail(new Error("socket closed"))),
       );
@@ -455,12 +464,10 @@ describe("spoken composer sends", () => {
       sendFails ? VOICE_MODE_SEND_FAILED_PHRASE : "Reply",
     );
     if (sendFails) {
-      expect
-        .soft(state.mergeDraft)
-        .toHaveBeenCalledExactlyOnceWith(
-          expect.any(String),
-          expect.objectContaining({ text: "spoken follow-up", attachments: [] }),
-        );
+      expect(state.mergeDraft).toHaveBeenCalledExactlyOnceWith(
+        expect.any(String),
+        expect.objectContaining({ text: "spoken follow-up", attachments: [] }),
+      );
     } else {
       expect(state.mergeDraft).not.toHaveBeenCalled();
     }
