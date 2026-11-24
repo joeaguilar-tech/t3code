@@ -127,6 +127,35 @@ describe("attachment-only bootstrap prompts", () => {
 });
 
 describe("provider projection", () => {
+  it("adds a spoken reply note after the user text and any context envelope", () => {
+    const plain = Object.freeze({ text: "Explain this", records: [] });
+    const withReference = Object.freeze({
+      text: "Explain [the skill](t3-context://v1/skill/ctx_s)",
+      records: [skill],
+    });
+
+    expect(projectComposerContextForProvider(plain)).toBe("Explain this");
+    const spokenPlain = { ...plain, spoken: true };
+    const projectedPlain = projectComposerContextForProvider(spokenPlain);
+    expect(projectedPlain).toMatch(/^Explain this\n\nThis message was spoken\./);
+    const note = projectedPlain.slice(plain.text.length + 2);
+    expect(spokenPlain.text).toBe("Explain this");
+
+    const withoutNote = projectComposerContextForProvider(withReference);
+    expect(withoutNote).toMatch(/<\/t3_context>$/);
+    for (const input of [plain, withReference]) {
+      const typed = { ...input, spoken: false };
+      expect(projectComposerContextForProvider(typed)).toBe(
+        projectComposerContextForProvider(input),
+      );
+    }
+    const spokenWithReference = { ...withReference, spoken: true };
+    expect(projectComposerContextForProvider(spokenWithReference)).toBe(
+      `${withoutNote}\n\n${note}`,
+    );
+    expect(spokenWithReference.text).toBe("Explain [the skill](t3-context://v1/skill/ctx_s)");
+  });
+
   const terminal: ComposerContextRecord = {
     version: 1,
     contextId: ctx("ctx_t"),

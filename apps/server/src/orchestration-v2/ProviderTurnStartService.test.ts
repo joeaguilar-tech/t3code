@@ -390,6 +390,7 @@ it.each([
 
 function makeLocalCommandHarness(input: {
   readonly text: string;
+  readonly context?: OrchestrationV2ThreadProjection["messages"][number]["context"];
   readonly manualContinuation?: boolean;
   readonly nativeResumeUnsupported?: boolean;
   readonly steeringRestart?: boolean;
@@ -496,6 +497,7 @@ function makeLocalCommandHarness(input: {
     nodeId: rootNodeId,
     role: "user",
     text: input.text,
+    ...(input.context === undefined ? {} : { context: input.context }),
     attachments: [],
     streaming: false,
     createdBy: "user",
@@ -2095,6 +2097,27 @@ effectIt.effect(
       expect(harness.projection().runs.at(-1)?.status).toBe("running");
       expect(harness.startRootRun).toHaveBeenCalledOnce();
     }),
+);
+
+effectIt.effect("adds the spoken reply note only to provider text", () =>
+  Effect.gen(function* () {
+    const text = "Explain this";
+    const harness = makeLocalCommandHarness({
+      text,
+      context: { version: 1, records: [], spoken: true },
+      manualContinuation: true,
+      steeringRestart: true,
+      nativeResumeUnsupported: true,
+      sideChat: { contextRun: "delivered" },
+    });
+
+    yield* harness.start;
+
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toMatch(
+      /^Explain this\n\nThis message was spoken\./,
+    );
+    expect(harness.projection().messages[0]?.text).toBe(text);
+  }),
 );
 
 effectIt.effect("sends new steering text when restarting a manual continuation", () =>
