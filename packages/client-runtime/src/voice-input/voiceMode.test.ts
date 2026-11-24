@@ -15,19 +15,12 @@ import {
 
 function setup(autoMute = true) {
   let heardSpeech = false;
-  let manuallyOpened = false;
   const violations = new Map<unknown, Set<string>>();
   let transcript: Parameters<VoiceModeMicrophone["open"]>[0] | undefined;
   const microphone = {
     open: vi.fn<VoiceModeMicrophone["open"]>((callback) => {
       heardSpeech = false;
-      const receive = (text: string) => {
-        if (transcript === receive && controller["microphoneWindow"] && text.trim()) {
-          manuallyOpened = false;
-        }
-        return step(() => callback(text));
-      };
-      transcript = receive;
+      transcript = (text) => step(() => callback(text));
     }),
     cancel: vi.fn(),
     finish: vi.fn(),
@@ -43,7 +36,6 @@ function setup(autoMute = true) {
     speech,
     timer: {
       schedule: (delay, callback) => {
-        if (delay === VOICE_MODE_LISTEN_WINDOW_MS) manuallyOpened = false;
         timers.set(callback, delay);
         return () => timers.delete(callback);
       },
@@ -74,9 +66,7 @@ function setup(autoMute = true) {
     const scheduled = [...timers.values()];
     require(scheduled.includes(VOICE_MODE_LISTEN_WINDOW_MS) ||
       heardSpeech ||
-      scheduled.includes(15_000) ||
-      // A manual unmute currently opens without a listen-window timer.
-      manuallyOpened, "auto-mute microphone open with no timer or speech activity");
+      scheduled.includes(15_000), "auto-mute microphone open with no timer or speech activity");
   }
 
   function step<T>(action: () => T): T {
@@ -103,12 +93,7 @@ function setup(autoMute = true) {
       step(() => controller.noteSpeechActivity());
     },
     tapToSend: () => step(() => controller.tapToSend()),
-    toggleMute: () =>
-      step(() => {
-        manuallyOpened =
-          !controller.currentState.microphoneOpen || controller.currentState.manuallyMuted;
-        controller.toggleMute();
-      }),
+    toggleMute: () => step(() => controller.toggleMute()),
   };
   return {
     controller: controls,
@@ -164,6 +149,59 @@ describe("VoiceModeController", () => {
     expect(h.controller.currentState.microphoneOpen).toBe(true);
     await h.say("follow-up");
     expect(h.send).toHaveBeenLastCalledWith("follow-up");
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+  });
+
+  it.each(["running", "needs-user"] as const)(
+    "mutes after a silent manual unmute during %s",
+    async (type) => {
+      const h = setup();
+      await h.say("first");
+      await h.controller.handleRunEvent({ type });
+      h.controller.toggleMute();
+      if (type === "needs-user") {
+        expect(h.controller.currentState.microphoneOpen).toBe(false);
+        await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+        await h.running();
+      }
+      expect(h.controller.currentState.microphoneOpen).toBe(true);
+      await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+      expect(h.controller.currentState.microphoneOpen).toBe(false);
+    },
+  );
+
+  it("times the listen window after interrupting a needs-user announcement while muted", async () => {
+    const h = setup();
+    h.controller.toggleMute();
+    const playback = Promise.withResolvers<void>();
+    h.speech.speak.mockReturnValueOnce(playback.promise);
+    const needsUser = h.controller.handleRunEvent({ type: "needs-user" });
+    h.controller.interrupt();
+    playback.resolve();
+    await needsUser;
+    expect(h.controller.currentState).toMatchObject({ phase: "paused", microphoneOpen: false });
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    await h.running();
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+  });
+
+  it("times the listen window after a mute tap during the working announcement", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.running();
+    const playback = Promise.withResolvers<void>();
+    h.speech.speak.mockReturnValueOnce(playback.promise);
+    const working = h.elapse(VOICE_MODE_WORKING_DELAY_MS);
+    expect(h.speech.speak).toHaveBeenLastCalledWith(VOICE_MODE_WORKING_PHRASE);
+    h.controller.toggleMute();
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
+    playback.resolve();
+    await working;
+    expect(h.controller.currentState.microphoneOpen).toBe(true);
+    await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
     expect(h.controller.currentState.microphoneOpen).toBe(false);
   });
 
@@ -820,7 +858,7 @@ describe("VoiceModeController", () => {
     expect(h.send).toHaveBeenCalledExactlyOnceWith("first");
     expect(h.controller.currentState.microphoneOpen).toBe(true);
     await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
-    expect(h.controller.currentState.microphoneOpen).toBe(phase === "run");
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
   });
 
   it("cancels the working timer on end", async () => {
