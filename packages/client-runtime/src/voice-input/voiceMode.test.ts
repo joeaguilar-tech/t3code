@@ -9,7 +9,7 @@ import {
   VOICE_MODE_WORKING_PHRASE,
   type VoiceModeMicrophone,
   type VoiceModeState,
-} from "./voiceMode.ts";
+} from "./index.ts";
 
 function setup(autoMute = true) {
   let transcript: Parameters<VoiceModeMicrophone["open"]>[0] | undefined;
@@ -52,7 +52,8 @@ function setup(autoMute = true) {
     finish: (...handledMessageIds: string[]) =>
       controller.handleRunEvent({ type: "finished", finalMessage: "reply", handledMessageIds }),
     async elapse(delay: number) {
-      for (const [callback, scheduled] of [...timers]) {
+      const pending = [...timers];
+      for (const [callback, scheduled] of pending) {
         if (scheduled !== delay || !timers.delete(callback)) continue;
         await callback();
       }
