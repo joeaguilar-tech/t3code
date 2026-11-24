@@ -51,6 +51,10 @@ function setup(autoMute = true) {
     running: () => controller.handleRunEvent({ type: "running" }),
     finish: (...handledMessageIds: string[]) =>
       controller.handleRunEvent({ type: "finished", finalMessage: "reply", handledMessageIds }),
+    fail: (...handledMessageIds: string[]) => {
+      const event = { type: "failed", handledMessageIds } as const;
+      return controller.handleRunEvent(event);
+    },
     async elapse(delay: number) {
       const pending = [...timers];
       for (const [callback, scheduled] of pending) {
@@ -160,6 +164,37 @@ describe("VoiceModeController", () => {
     expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith("spoken: reply");
   });
 
+  it("keeps waiting for a queued message when an earlier run fails", async () => {
+    const h = setup();
+    await h.say("first");
+    await h.running();
+    h.controller.toggleMute();
+    await h.say("queued");
+
+    await h.fail("id:first");
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(
+      "An earlier request failed. Check the screen.",
+    );
+    expect(h.controller.currentState).toMatchObject({ phase: "waiting", microphoneOpen: false });
+
+    await h.running();
+    await h.finish("id:queued");
+    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: reply");
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
+  it("announces a matching run failure that arrives before the send returns its ID", async () => {
+    const h = setup();
+    const send = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(send.promise);
+    const pending = h.say("first");
+    await h.fail("id:first");
+    send.resolve("id:first");
+    await pending;
+    expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(VOICE_MODE_FAILED_PHRASE);
+    expect(h.controller.currentState.phase).toBe("listening");
+  });
+
   it("announces a slow run once per wait", async () => {
     const h = setup();
     await h.say("hello");
@@ -187,7 +222,7 @@ describe("VoiceModeController", () => {
     const h = setup();
     await h.say("hello");
     await h.controller.handleRunEvent({ type: "needs-user" });
-    await h.controller.handleRunEvent({ type: "failed" });
+    await h.fail("id:hello");
     expect(h.speech.speak).toHaveBeenLastCalledWith(VOICE_MODE_FAILED_PHRASE);
     expect(h.controller.currentState).toMatchObject({ phase: "listening", microphoneOpen: true });
   });
@@ -218,6 +253,8 @@ describe("VoiceModeController", () => {
         h.controller.toggleMute();
       } else if (transition === "finished") {
         feed = h.finish("id:first");
+      } else if (transition === "failed") {
+        feed = h.fail("id:first");
       } else {
         feed = h.controller.handleRunEvent({ type: transition });
       }
@@ -371,7 +408,7 @@ describe("VoiceModeController", () => {
     const h = setup(false);
     await h.say("first");
     await h.running();
-    await h.controller.handleRunEvent({ type: "failed" });
+    await h.fail("id:first");
     expect(h.speech.speak).toHaveBeenCalledExactlyOnceWith(VOICE_MODE_FAILED_PHRASE);
     await h.elapse(VOICE_MODE_LISTEN_WINDOW_MS);
     expect(h.controller.currentState.phase).toBe("listening");
@@ -417,7 +454,7 @@ describe("VoiceModeController", () => {
     playback.resolve();
     await finished;
     await h.running();
-    await h.controller.handleRunEvent({ type: "failed" });
+    await h.fail("id:hello");
     expect(h.speech.speak).toHaveBeenCalledOnce();
     expect(h.controller.currentState).toMatchObject({ phase: "ended", microphoneOpen: false });
   });
