@@ -3,12 +3,13 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { Plugin } from "vite-plus";
 
+import { brandCopyPlugin } from "../../../scripts/fork/brandCopy.ts";
 import { formatWebManifest } from "../src/branding.logic.ts";
 
 export function forkWebAssetsPlugin(
   brand: string | undefined,
   webAssets: Readonly<Record<string, string>>,
-): Plugin {
+): Plugin[] {
   const manifest = new URL("../public/manifest.webmanifest", import.meta.url);
   const assets = new Map(
     Object.values(webAssets).map((source) => [
@@ -19,7 +20,7 @@ export function forkWebAssetsPlugin(
   const readManifest = async () =>
     formatWebManifest(await NodeFSP.readFile(manifest, "utf8"), brand);
 
-  return {
+  const assetsPlugin: Plugin = {
     name: "t3code:fork-web-assets",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -52,4 +53,6 @@ export function forkWebAssetsPlugin(
       ]);
     },
   };
+  const copy = brandCopyPlugin(brand, "web");
+  return copy ? [copy, assetsPlugin] : [assetsPlugin];
 }

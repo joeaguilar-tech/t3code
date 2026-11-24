@@ -118,3 +118,4 @@ module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareStreamS
       polyfills: { rem: 14 },
     }),
 );
+module.exports = require("../../scripts/fork/brandCopyMetro.cjs").wrap(module.exports);

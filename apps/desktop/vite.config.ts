@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import { defaultInclude, defineConfig } from "vite-plus";
 import { Rolldown } from "vite-plus/pack";
 
+import { brandCopyPlugin } from "../../scripts/fork/brandCopy.ts";
 import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-external-packages.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
@@ -98,6 +99,7 @@ export default defineConfig({
       define: publicConfigDefine,
       outputOptions: { codeSplitting: false },
       entry: ["src/main.ts"],
+      plugins: [brandCopyPlugin(repoEnv.T3CODE_BRAND, "desktop")],
       clean: true,
       deps: {
         alwaysBundle: (id) => !id.startsWith("node:") && !isMainProcessExternal(id),

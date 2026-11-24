@@ -3,7 +3,18 @@
   "compilerOptions": {
     "composite": true,
     "types": ["node"],
-    "lib": ["ESNext", "esnext.disposable"]
+    "lib": ["ESNext", "esnext.disposable"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "overrides": [
+          {
+            "include": ["fork/brandCopy.test.ts"],
+            "options": { "diagnosticSeverity": { "nodeBuiltinImport": "off" } }
+          }
+        ]
+      }
+    ]
   },
   "include": ["**/*.ts"]
 }

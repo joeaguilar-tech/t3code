@@ -199,6 +199,7 @@ jobs:
           (cd apps/web && run vp test run --project unit src/branding.logic.test.ts) || ok=false
           run vp test run scripts/build-desktop-artifact.identity.test.ts || ok=false
           run vp test run scripts/apply-web-brand-assets.test.ts || ok=false
+          run vp test run scripts/fork/brandCopy.test.ts || ok=false
           run vp run typecheck || ok=false
           (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
           (cd packages/client-runtime && run vp test run src/state -t "mute|Mute") || ok=false
