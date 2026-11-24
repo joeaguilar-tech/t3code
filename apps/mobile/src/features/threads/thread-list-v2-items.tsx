@@ -333,7 +333,9 @@ const SHELF_COPY = {
   },
   automations: {
     label: msg("Automations", { $context: "thread list section" }),
-    count: msg("{count, plural, one {{count} automation thread} other {{count} automation threads}}"),
+    count: msg(
+      "{count, plural, one {{count} automation thread} other {{count} automation threads}}",
+    ),
     collapse: msg("Collapses the automation threads."),
     expand: msg("Expands the automation threads."),
   },

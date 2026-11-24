@@ -302,7 +302,9 @@ export function SettingsVoiceRouteScreen() {
           <SettingsSection title={gt("Voice mode")}>
             <SettingsSwitchRow
               label={gt("Auto-mute")}
-              subtitle={gt("Mute while the agent works and after a short silence following its reply.")}
+              subtitle={gt(
+                "Mute while the agent works and after a short silence following its reply.",
+              )}
               value={voiceModeAutoMute(
                 AsyncResult.isSuccess(preferencesResult)
                   ? preferencesResult.value.voiceModeAutoMute
