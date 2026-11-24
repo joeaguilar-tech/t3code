@@ -1,8 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useRoute } from "@react-navigation/native";
 import {
   VoiceModeController,
   voiceInputBlocksSubmission,
+  type VoiceInputPhase,
   type VoiceModeState,
 } from "@t3tools/client-runtime/voice-input";
 import { splitSpokenReply } from "@t3tools/shared/spokenReply";
@@ -11,16 +12,20 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Keyboard, Platform } from "react-native";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAppForeground } from "../../lib/appState";
+import { rootNavigationRef } from "../../lib/rootNavigation";
 import { uuidv4 } from "../../lib/uuid";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { keepScreenAwake, useVoiceInputCapture } from "../voice-input/VoiceInputProvider";
 import { deriveVoiceRunEvents, voiceModeAutoMute, type ThreadVoiceState } from "./threadVoiceMode";
+import { publishFloatingVoiceModeControl } from "./FloatingVoiceModeControl";
+import { createVoiceModeCover } from "./voiceModeCover";
 import { createVoiceModeAudio } from "./voiceModeAudio";
 
 type Session = {
   readonly threadKey: string;
   readonly controller: VoiceModeController;
   readonly dispose: () => void;
+  readonly toggleMute: () => void;
   previous: ThreadVoiceState;
 };
 
@@ -32,11 +37,15 @@ export function useVoiceMode(input: {
   readonly needsUser: boolean;
   readonly sendSpokenMessage: (text: string) => Promise<string>;
 }) {
+  const route = useRoute();
   const voiceInput = useVoiceInputCapture();
   const foreground = useAppForeground();
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const [state, setState] = useState<VoiceModeState | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [view, setView] = useState<{
+    state: VoiceModeState;
+    placement: ReturnType<typeof createVoiceModeCover>["placement"];
+  } | null>(null);
+  const [capturePhase, setCapturePhase] = useState<VoiceInputPhase>("idle");
   const active = useRef<Session | null>(null);
   const latest = useRef(input);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the long-lived controller must use committed thread and permission state when a transcript arrives
@@ -49,11 +58,13 @@ export function useVoiceMode(input: {
     if (!session) return;
     active.current = null;
     session.dispose();
-    setState(null);
+    publishFloatingVoiceModeControl(null);
+    setView(null);
   }, []);
 
   const threadKey = input.threadKey;
-  useFocusEffect(useCallback(() => end, [end]));
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- disposes the native session when its owning screen unmounts
+  useLayoutEffect(() => end, [end]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases native audio and keep-awake when leaving the thread or the foreground
   useLayoutEffect(() => {
     if (!foreground || !input.enabled || active.current?.threadKey !== threadKey) end();
@@ -93,6 +104,13 @@ export function useVoiceMode(input: {
       voiceInputBlocksSubmission(voiceInput.session.controller.currentState)
     )
       return;
+    const cover = createVoiceModeCover();
+    const updateCover = () => {
+      const root = rootNavigationRef.getRootState();
+      if (root) cover.update(root.routes.slice(0, root.index + 1), route.key);
+    };
+    updateCover();
+    if (cover.placement !== "inline") return;
     Keyboard.dismiss();
     const thread = { runs, messages, needsUser };
     const ownerKey = `voice-mode:${uuidv4()}`;
@@ -100,15 +118,24 @@ export function useVoiceMode(input: {
       session: voiceInput.session,
       ownerKey,
       noteSpeechActivity: () => controller.noteSpeechActivity(),
-      onCaptureChange: setRecording,
+      requestFinish: () => controller.tapToSend(),
+      onCaptureChange: setCapturePhase,
       onError(message) {
         end();
         Dialog.alert("Voice mode stopped", message);
       },
     });
     const controller = new VoiceModeController({
-      microphone: audio.microphone,
-      speech: audio.speech,
+      microphone: {
+        ...audio.microphone,
+        open(onTranscript) {
+          if (!cover.captureMuted) audio.microphone.open(onTranscript);
+        },
+      },
+      speech: {
+        ...audio.speech,
+        speak: (text) => (cover.speechSuppressed ? Promise.resolve() : audio.speech.speak(text)),
+      },
       autoMute: voiceModeAutoMute(preferences.value.voiceModeAutoMute),
       sendSpokenMessage: (text) => {
         const current = latest.current;
@@ -129,16 +156,58 @@ export function useVoiceMode(input: {
           return () => clearTimeout(timeout);
         },
       },
-      toSpeech: (message) => splitSpokenReply(message).blurb,
+      toSpeech: (message) => (message.trim() ? splitSpokenReply(message).blurb : ""),
     });
     const releaseAwake = keepScreenAwake(ownerKey);
-    const unsubscribe = controller.subscribe(setState);
+    const toggleMute = () => {
+      if (cover.speechSuppressed) return;
+      if (cover.captureMuted) {
+        cover.unmute();
+        if (controller.currentState.microphoneOpen) controller.cancelTurn();
+        else controller.toggleMute();
+        publish();
+        return;
+      }
+      controller.toggleMute();
+    };
+    const publish = () => {
+      const state = cover.control(controller.currentState);
+      setView({ state, placement: cover.placement });
+      publishFloatingVoiceModeControl(
+        cover.placement === "floating"
+          ? cover.control({
+              microphoneOpen: controller.currentState.microphoneOpen,
+              toggleMute,
+              end,
+            })
+          : null,
+      );
+    };
+    const unsubscribe = controller.subscribe(publish);
+    const unsubscribeNavigation = rootNavigationRef.addListener("state", () => {
+      const previous = cover.placement;
+      updateCover();
+      if (cover.placement === previous) return;
+      if (cover.placement === "away") {
+        end();
+        return;
+      }
+      if (cover.speechSuppressed) {
+        // Discard an in-flight capture before a native cover can hide the controls.
+        audio.speech.stopSpeaking();
+        controller.cancelTurn();
+        if (controller.currentState.microphoneOpen) controller.toggleMute();
+      }
+      publish();
+    });
     voiceInput.session.setOwnerFocused(ownerKey, true);
     active.current = {
       threadKey,
       controller,
       previous: thread,
+      toggleMute,
       dispose() {
+        unsubscribeNavigation();
         unsubscribe();
         controller.end();
         audio.dispose();
@@ -153,11 +222,12 @@ export function useVoiceMode(input: {
   return {
     available,
     canStart,
-    state,
-    recording,
+    state: view?.state ?? null,
+    placement: view?.placement ?? "inline",
+    capturePhase,
     start,
     end,
-    toggleMute: () => active.current?.controller.toggleMute(),
+    toggleMute: () => active.current?.toggleMute(),
     cancelTurn: () => active.current?.controller.cancelTurn(),
     tapToSend: () => active.current?.controller.tapToSend(),
     interrupt: () => active.current?.controller.interrupt(),

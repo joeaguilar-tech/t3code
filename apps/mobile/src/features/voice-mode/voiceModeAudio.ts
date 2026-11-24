@@ -1,4 +1,8 @@
-import type { VoiceModeMicrophone, VoiceModeSpeech } from "@t3tools/client-runtime/voice-input";
+import type {
+  VoiceInputPhase,
+  VoiceModeMicrophone,
+  VoiceModeSpeech,
+} from "@t3tools/client-runtime/voice-input";
 import {
   acquireAudioSession,
   activateAudioSession,
@@ -10,6 +14,7 @@ import { speak, stopSpeaking } from "./speech";
 
 type Window = {
   unsubscribe?: () => void;
+  stop: () => void;
   finishRequested: boolean;
 };
 
@@ -18,9 +23,10 @@ let audioReady = Promise.resolve();
 export function createVoiceModeAudio(input: {
   session: VoiceInputSession;
   ownerKey: string;
+  requestFinish: () => void;
   noteSpeechActivity: () => void;
   onError: (message: string) => void;
-  onCaptureChange: (recording: boolean) => void;
+  onCaptureChange: (phase: VoiceInputPhase) => void;
 }) {
   const { session, ownerKey } = input;
   let window: Window | null = null;
@@ -38,24 +44,52 @@ export function createVoiceModeAudio(input: {
   const closeWindow = () => {
     window?.unsubscribe?.();
     window = null;
-    input.onCaptureChange(false);
+    input.onCaptureChange("idle");
   };
   const finish: VoiceModeMicrophone["finish"] = () => {
     if (!window || window.finishRequested) return;
     window.finishRequested = true;
-    if (ownsInput() && session.controller.currentState.phase === "recording") {
-      recordingOperation = session.controller.stop();
-    }
+    window.stop();
   };
 
   const microphone: VoiceModeMicrophone = {
     open(onTranscript) {
-      const current: Window = { finishRequested: false };
+      const current: Window = {
+        finishRequested: false,
+        stop() {
+          if (
+            window !== current ||
+            !ownsInput() ||
+            session.controller.currentState.phase !== "recording"
+          )
+            return;
+          recordingOperation = session.controller.stop().catch(() => {
+            complete("Could not finish voice recording.", "");
+          });
+        },
+      };
       const quiet = createQuietDetector();
       let heardSpeech = false;
       let transcript = "";
       window = current;
 
+      let completing = false;
+      const complete = (error: string | null, text = transcript) => {
+        if (completing || window !== current) return;
+        completing = true;
+        queueMicrotask(() => {
+          const settled = Promise.allSettled([recordingOperation, session.nativeRecordingSettled]);
+          audioReady = Promise.all([audioReady, settled]).then(() => {});
+          void settled.then(() => {
+            if (window !== current) return;
+            closeWindow();
+            if (error && ownsInput()) session.cancel(ownerKey);
+            void onTranscript(text);
+            if (error && error !== "No speech was detected.") input.onError(error);
+          });
+        });
+      };
+      input.onCaptureChange("preparing");
       const start = audioReady.then(async () => {
         if (window !== current) return;
         const target = {
@@ -80,60 +114,31 @@ export function createVoiceModeAudio(input: {
               heardSpeech = true;
               input.noteSpeechActivity();
             }
-            if (quiet.sample(level)) finish();
+            if (quiet.sample(level)) input.requestFinish();
           },
         };
         let started = false;
         current.unsubscribe = session.subscribe(() => {
-          if (window !== current || !ownsInput()) return;
+          if (window !== current) return;
+          if (!ownsInput()) {
+            if (started) complete("Another voice recording is already active.", "");
+            return;
+          }
           const { phase, error } = session.controller.currentState;
-          input.onCaptureChange(phase === "recording");
+          input.onCaptureChange(phase);
           if (phase === "preparing") started = true;
           if (!started) return;
           if (phase === "recording" && current.finishRequested) {
-            queueMicrotask(() => {
-              if (
-                window === current &&
-                ownsInput() &&
-                session.controller.currentState.phase === "recording"
-              ) {
-                recordingOperation = session.controller.stop();
-              }
-            });
+            queueMicrotask(current.stop);
           }
-          if (phase === "idle" || phase === "error") {
-            queueMicrotask(() => {
-              if (window !== current) return;
-              const settled = Promise.allSettled([
-                recordingOperation,
-                session.nativeRecordingSettled,
-              ]);
-              if (error && error !== "No speech was detected.") {
-                closeWindow();
-                session.cancel(ownerKey);
-                audioReady = Promise.all([audioReady, settled]).then(() => {});
-                input.onError(error);
-                return;
-              }
-              void settled.then(() => {
-                if (window !== current) return;
-                closeWindow();
-                if (error) session.cancel(ownerKey);
-                void onTranscript(transcript);
-              });
-            });
-          }
+          if (phase === "transcribing") input.requestFinish();
+          if (phase === "idle" || phase === "error") complete(error);
         });
         await session.start(target);
-        if (window === current && !started) {
-          closeWindow();
-          input.onError("Another voice recording is already active.");
-        }
+        if (!started) complete("Another voice recording is already active.", "");
       });
       recordingOperation = start.catch(() => {
-        if (window !== current) return;
-        closeWindow();
-        input.onError("Could not start voice recording.");
+        complete("Could not start voice recording.", "");
       });
     },
     cancel() {

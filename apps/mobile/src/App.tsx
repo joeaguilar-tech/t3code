@@ -77,6 +77,7 @@ import { installUiRuntimeMemoryWarningGc } from "./lib/useUiRuntimeMemoryWarning
 import { SubscriptionUsageCoordinator } from "./widgets/SubscriptionUsageCoordinator";
 import { ConnectDeviceApprovalCoordinator } from "./features/connection/ConnectDeviceApprovalCoordinator";
 import { installSubscriptionUsageRefresh } from "./widgets/useSubscriptionUsage";
+import { FloatingVoiceModeControl } from "./features/voice-mode/FloatingVoiceModeControl";
 import { GlobalVoiceInputControl } from "./features/voice-input/GlobalVoiceInputControl";
 import {
   launchSplashHomeRowsPending,
@@ -303,6 +304,7 @@ function AppContent() {
               </NativeLayoutMetricsProvider>
             </GlobalVoiceInputControl>
             <OverlayPortalHost />
+            <FloatingVoiceModeControl />
           </SafeAreaProvider>
         </KeyboardProvider>
       </GestureHandlerRootView>
