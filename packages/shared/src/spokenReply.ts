@@ -32,7 +32,7 @@ const SENTENCE_END = /[.!?。！？]+["'”’)\]]*(?= |$)/g;
 const ABBREVIATION = /\b(?:Mr|Mrs|Ms|Dr|vs|e\.g|i\.e|a\.m|p\.m)$/i;
 // "No" needs an earlier word in the sentence, so a one-word "No." answer still ends its sentence.
 const NUMBER_ABBREVIATION =
-  /(?:(?<![\p{L}\p{N}])(?:Fig|Figs|Vol|Ch|Sec|Eq|p|pp|approx)|[\p{L}\p{N}][^\p{L}\p{N}]+Nos?)$/u;
+  /(?:(?<![\p{L}\p{N}-])(?:Fig|Figs|Vol|Ch|Sec|Eq|p|pp|approx)|[\p{L}\p{N}][\s([“"'‘—–-]+Nos?)$/u;
 const DOTTED_INITIALISM = /\b(?:[A-Z]\.)+[A-Z]$/;
 
 export function splitSpokenReply(text: string): { blurb: string; hasOnScreenPart: boolean } {
