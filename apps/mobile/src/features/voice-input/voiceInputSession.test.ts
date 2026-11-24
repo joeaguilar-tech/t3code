@@ -71,12 +71,14 @@ describe("global voice input", () => {
     try {
       expect(await activateAudioSession(token)).toBe(true);
       expect(audio.setMode.mock.calls).toEqual([
-        [{
-          allowsRecording: true,
-          interruptionMode: "duckOthers",
-          playsInSilentMode: true,
-          shouldPlayInBackground: false,
-        }],
+        [
+          {
+            allowsRecording: true,
+            interruptionMode: "duckOthers",
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+          },
+        ],
       ]);
       expect(audio.setActive).toHaveBeenLastCalledWith(true);
       const playback = acquireAudioSession("playback");

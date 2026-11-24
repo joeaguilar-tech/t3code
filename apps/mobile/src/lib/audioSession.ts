@@ -47,7 +47,7 @@ export function acquireAudioSession(
   onRelease?: () => void,
 ) {
   const token: AudioSessionToken = { kind, onCancel, onRelease, released: false };
-  if (kind === "playback" && owner?.kind === "recording" && !owner.released) return token;
+  if (kind === "playback" && owner && owner.kind !== "playback" && !owner.released) return token;
   const previous = owner;
   // Publish before cancelling the old player, including callbacks already queued by Expo.
   AudioModule.setAudioSessionOwner?.(true);
@@ -69,8 +69,8 @@ export function activateAudioSession(
     // Video configures and activates its own native session, including moviePlayback on iOS.
     if (nativePlayback) return true;
     await setAudioModeAsync({
-      allowsRecording: token.kind === "recording",
-      interruptionMode: "doNotMix",
+      allowsRecording: token.kind !== "playback",
+      interruptionMode: token.kind === "voice-mode" ? "duckOthers" : "doNotMix",
       playsInSilentMode: true,
       shouldPlayInBackground: false,
     });
@@ -85,10 +85,14 @@ export function releaseAudioSession(token: AudioSessionToken): Promise<void> {
   return enqueue(async () => {
     if (owner !== token) return;
     try {
-      if (token.kind === "recording") await setAudioModeAsync({ allowsRecording: false });
+      if (token.kind === "voice-mode") {
+        await setAudioModeAsync({ allowsRecording: false, interruptionMode: "mixWithOthers" });
+      } else if (token.kind === "recording") {
+        await setAudioModeAsync({ allowsRecording: false });
+      }
     } finally {
       if (owner === token) {
-        if (token.kind === "recording") await setIsAudioActiveAsync(false);
+        if (token.kind !== "playback") await setIsAudioActiveAsync(false);
         // Expo pause releases the native session without disabling its global playback gate.
         // Repeat it after any pending activation, even if playback never started.
         token.onRelease?.();

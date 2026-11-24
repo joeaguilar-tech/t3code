@@ -8,15 +8,18 @@ import {
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
 
-import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
-
-const VOICE_METERING_INTERVAL_MS = 80;
+import {
+  normalizeVoiceInputDecibels,
+  VOICE_METERING_INTERVAL_MS,
+  VOICE_WAVEFORM_SAMPLE_COUNT,
+} from "./voiceInputMetering";
 const IDLE_STATE: VoiceInputState = { phase: "idle", error: null, errorAction: null };
 const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE_COUNT).fill(0);
 
 export type VoiceInputTarget = {
   readonly ownerKey: string;
   readonly label?: string;
+  readonly voiceMode?: boolean;
   readonly onMeteringSample?: (level: number) => void;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
@@ -37,8 +40,9 @@ export type VoiceRecordingSample = {
 
 export type VoiceInputSessionDependencies = Omit<
   VoiceInputControllerDependencies,
-  "readDraft" | "commitDraft" | "onStateChange"
+  "readDraft" | "commitDraft" | "onStateChange" | "configureRecording"
 > & {
+  readonly configureRecording: (kind: "recording" | "voice-mode") => Promise<void>;
   /** Reads the live recorder, or null when it is not capturing. */
   readonly sampleRecording: () => VoiceRecordingSample | null;
   /** Levels change every metering tick, so they bypass React state. */
@@ -88,6 +92,8 @@ export class VoiceInputSession {
     this.dependencies = dependencies;
     this.controller = new VoiceInputController({
       ...dependencies,
+      configureRecording: () =>
+        dependencies.configureRecording(this.target?.voiceMode ? "voice-mode" : "recording"),
       onStateChange: (state) => this.handleStateChange(state),
       // The target's selection is fixed at start, so a draft changed since refuses the transcript.
       readDraft: () => {
@@ -166,8 +172,8 @@ export class VoiceInputSession {
 
   private startRecordingActivity(): void {
     this.releaseKeepAwake = this.dependencies.keepAwake();
-    this.sampleRecording();
     this.meteringInterval = setInterval(() => this.sampleRecording(), VOICE_METERING_INTERVAL_MS);
+    this.sampleRecording();
   }
 
   private stopRecordingActivity(): void {
@@ -194,6 +200,7 @@ export class VoiceInputSession {
     if (elapsedSeconds !== this.snapshot.elapsedSeconds) {
       this.publish({ ...this.snapshot, elapsedSeconds });
     }
+    this.target?.onMeteringSample?.(level);
   }
 
   private setAudioLevels(levels: ReadonlyArray<number>): void {
