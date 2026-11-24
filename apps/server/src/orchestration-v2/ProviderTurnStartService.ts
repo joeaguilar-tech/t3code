@@ -42,7 +42,7 @@ import { makeRestoreMissingWorktree } from "../workspace/restoreMissingWorktree.
 import * as EventSink from "./EventSink.ts";
 import * as ProviderUsageAnalytics from "../telemetry/ProviderUsageAnalytics.ts";
 import * as ContextHandoffService from "./ContextHandoffService.ts";
-import { isActiveRun } from "./CommandPolicy.ts";
+import { isActiveRun, isSlashCommandMessage } from "./CommandPolicy.ts";
 import {
   DEFAULT_HANDOFF_TOKEN_CAP,
   handoffTokenCapConfig,
@@ -552,10 +552,8 @@ export const layer: Layer.Layer<
           });
         },
       );
-      if (
-        providerMessage.attachments.length === 0 &&
-        providerMessage.text.trimStart().startsWith("/")
-      ) {
+      const isSlashCommand = isSlashCommandMessage(providerMessage);
+      if (isSlashCommand) {
         const isEmptyCompaction =
           providerMessage.text.trim().toLowerCase() === "/compact" && !projection.hasConversation;
         // Preparation may select a new provider; account commands still target the last native session.
@@ -847,7 +845,7 @@ export const layer: Layer.Layer<
       const userText = projectComposerContextForProvider({
         text: providerMessage.text,
         records: providerMessage.context?.records ?? [],
-        spoken: providerMessage.context?.spoken,
+        spoken: providerMessage.context?.spoken === true && !isSlashCommand,
       });
       // Native goal commands go verbatim; handoff history waits a turn.
       const goalDriver =
