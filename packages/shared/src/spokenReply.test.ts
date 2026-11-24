@@ -604,6 +604,24 @@ describe("splitSpokenReply", () => {
       true,
     ],
     [
+      "last sentence mentions the screen before fenced code",
+      "Done. The code is on your screen.\n\n---\n\n```ts\nx()\n```",
+      "Done. The code is on your screen.",
+      true,
+    ],
+    [
+      "last sentence mentions the screen after a dropped sentence",
+      "Run `npm test` first. The code is on your screen.\n\n---\n\nmore",
+      "The code is on your screen.",
+      true,
+    ],
+    [
+      "last sentence does not mention the screen",
+      "Done. Tests pass.\n\n---\n\nmore",
+      "Done. Tests pass. The rest is on your screen.",
+      true,
+    ],
+    [
       "standalone dotted and hyphenated backticked words",
       "Use `Next.js` and `well-known`.",
       "Use Next.js and well-known.",
