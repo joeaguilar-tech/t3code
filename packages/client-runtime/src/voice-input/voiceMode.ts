@@ -1,5 +1,5 @@
 export const VOICE_MODE_LISTEN_WINDOW_MS = 8_000;
-const VOICE_MODE_PROTECTED_WINDOW_MS = 15_000;
+const VOICE_MODE_TRANSCRIPTION_TIMEOUT_MS = 15_000;
 export const VOICE_MODE_WORKING_DELAY_MS = 4_000;
 export const VOICE_MODE_WORKING_PHRASE = "Working on it";
 export const VOICE_MODE_NEEDS_USER_PHRASE = "The agent needs you. Check the screen.";
@@ -64,10 +64,10 @@ type RunResult = Extract<VoiceModeRunEvent, { type: "finished" | "failed" }>;
 type MicrophoneWindow = {
   postReply: boolean;
   finishing: boolean;
+  cancelTranscriptionTimer?: () => void;
   protection?: {
     settled: Promise<void>;
     release: () => void;
-    cancelTimer: () => void;
   };
 };
 
@@ -129,9 +129,14 @@ export class VoiceModeController {
   toggleMute(): void {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();
-    if (this.microphoneWindow) this.microphoneWindow.postReply = false;
+    const window = this.microphoneWindow;
     this.manuallyMuted =
       !this.manuallyMuted && (this.state.microphoneOpen || this.canOpenMicrophone());
+    if (this.manuallyMuted && window?.protection && !window.finishing) {
+      this.cancelTurn();
+      return;
+    }
+    if (window) window.postReply = false;
     if (!this.manuallyMuted) this.wantsMicrophone = true;
     this.refresh();
   }
@@ -155,7 +160,7 @@ export class VoiceModeController {
 
   noteSpeechActivity(): void {
     const window = this.microphoneWindow;
-    if (!window || window.protection) return;
+    if (!window) return;
     this.protectWindow(window);
   }
 
@@ -165,23 +170,23 @@ export class VoiceModeController {
     window.finishing = true;
     this.protectWindow(window);
     this.dependencies.microphone.finish();
+    if (this.microphoneWindow !== window) return;
+    window.cancelTranscriptionTimer = this.dependencies.timer.schedule(
+      VOICE_MODE_TRANSCRIPTION_TIMEOUT_MS,
+      () => {
+        if (this.microphoneWindow === window) this.cancelTurn();
+      },
+    );
   }
 
   private protectWindow(window: MicrophoneWindow): void {
+    if (window.protection) return;
     this.clearListenTimer();
-    const cancelTimer = this.dependencies.timer.schedule(VOICE_MODE_PROTECTED_WINDOW_MS, () => {
-      if (this.microphoneWindow === window) this.cancelTurn();
+    let release!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    if (window.protection) {
-      window.protection.cancelTimer();
-      window.protection.cancelTimer = cancelTimer;
-    } else {
-      let release!: () => void;
-      const settled = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      window.protection = { settled, release, cancelTimer };
-    }
+    window.protection = { settled, release };
   }
 
   async handleRunEvent(event: VoiceModeRunEvent): Promise<void> {
@@ -237,7 +242,7 @@ export class VoiceModeController {
 
   private releaseWindow(window: MicrophoneWindow): void {
     this.microphoneWindow = undefined;
-    window.protection?.cancelTimer();
+    window.cancelTranscriptionTimer?.();
     window.protection?.release();
   }
 
