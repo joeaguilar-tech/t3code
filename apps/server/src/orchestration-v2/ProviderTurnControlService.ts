@@ -20,7 +20,7 @@ import * as Stream from "effect/Stream";
 
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
-import { isSlashCommandMessage } from "./CommandPolicy.ts";
+import { isAttachmentFreeSlashPrompt } from "./CommandPolicy.ts";
 import * as EventSink from "./EventSink.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -470,7 +470,8 @@ export const layer: Layer.Layer<
                   projectComposerContextForProvider({
                     text: message.text,
                     records: message.context?.records ?? [],
-                    spoken: message.context?.spoken === true && !isSlashCommandMessage(message),
+                    spoken:
+                      message.context?.spoken === true && !isAttachmentFreeSlashPrompt(message),
                   }),
                 ),
                 attachments: message.attachments,

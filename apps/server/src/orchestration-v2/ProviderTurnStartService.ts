@@ -56,7 +56,7 @@ import * as ContextHandoffService from "./ContextHandoffService.ts";
 import {
   canForkBusySourceNatively,
   isActiveRun,
-  isSlashCommandMessage as isAttachmentFreeSlashPrompt,
+  isAttachmentFreeSlashPrompt,
 } from "./CommandPolicy.ts";
 import { contextBoundaryOrdinal, isScheduledFreshRun } from "./contextBoundary.ts";
 import {

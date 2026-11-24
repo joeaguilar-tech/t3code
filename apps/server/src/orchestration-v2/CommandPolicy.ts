@@ -60,7 +60,7 @@ type MessageDispatchMode = Extract<
   { readonly type: "message.dispatch" }
 >["dispatchMode"];
 
-export function isSlashCommandMessage(message: {
+export function isAttachmentFreeSlashPrompt(message: {
   readonly text: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
 }): boolean {
