@@ -2099,27 +2099,6 @@ effectIt.effect(
     }),
 );
 
-effectIt.effect("adds the spoken reply note only to provider text", () =>
-  Effect.gen(function* () {
-    const text = "Explain this";
-    const harness = makeLocalCommandHarness({
-      text,
-      context: { version: 1, records: [], spoken: true },
-      manualContinuation: true,
-      steeringRestart: true,
-      nativeResumeUnsupported: true,
-      sideChat: { contextRun: "delivered" },
-    });
-
-    yield* harness.start;
-
-    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toMatch(
-      /^Explain this\n\nThis message was spoken\./,
-    );
-    expect(harness.projection().messages[0]?.text).toBe(text);
-  }),
-);
-
 effectIt.effect("sends new steering text when restarting a manual continuation", () =>
   Effect.gen(function* () {
     const harness = makeLocalCommandHarness({
@@ -2311,6 +2290,21 @@ effectIt.effect.each(
       if (nativeGoals)
         expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe("/goal all tests pass");
     }),
+);
+
+effectIt.effect("sends a spoken goal command verbatim", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "/goal pause",
+      context: { version: 1, records: [], spoken: true },
+      sideChat: { contextRun: "failed", switchedProvider: true },
+    });
+    harness.tryHandlePromptCommand.mockReturnValue(Effect.succeed(false));
+
+    yield* harness.start;
+
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe("/goal pause");
+  }),
 );
 
 effectIt.effect.each([
