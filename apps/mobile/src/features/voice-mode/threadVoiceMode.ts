@@ -49,8 +49,12 @@ export function deriveVoiceRunEvents(
         }
         const ids = [...handledMessageIds];
         const event =
-          run.status === "completed"
-            ? { type: "finished" as const, finalMessage, handledMessageIds: ids }
+          run.status !== "failed"
+            ? {
+                type: "finished" as const,
+                finalMessage: run.status === "interrupted" ? "" : finalMessage,
+                handledMessageIds: ids,
+              }
             : { type: "failed" as const, handledMessageIds: ids };
         events.push(event);
       }

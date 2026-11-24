@@ -14,22 +14,35 @@ const statusLabels = {
   ended: "Muted",
 };
 
+export function VoiceModeMuteButton(props: {
+  readonly microphoneOpen: boolean;
+  readonly onPress: () => void;
+}) {
+  return (
+    <ComposerActionButton
+      accessibilityLabel={props.microphoneOpen ? "Mute microphone" : "Unmute microphone"}
+      icon={props.microphoneOpen ? "mic" : "mic.slash"}
+      onPress={props.onPress}
+    />
+  );
+}
+
 export function ThreadVoiceModeToolbar({ voiceMode }: { voiceMode: ThreadVoiceMode }) {
-  const { state, recording } = voiceMode;
-  if (!state) return null;
-  const status =
-    state.phase === "listening" && !recording ? "Preparing microphone" : statusLabels[state.phase];
+  const { state, capturePhase, placement } = voiceMode;
+  if (!state || placement !== "inline") return null;
+  const transcribing = capturePhase === "transcribing" || capturePhase === "post-processing";
+  const status = transcribing
+    ? "Transcribing"
+    : state.phase === "listening" && capturePhase !== "recording"
+      ? "Preparing microphone"
+      : statusLabels[state.phase];
   return (
     <View className="flex-row items-center px-4">
       <Text className="min-w-0 flex-1 text-sm text-foreground-muted" numberOfLines={1}>
         {status}
       </Text>
-      <ComposerActionButton
-        accessibilityLabel={state.microphoneOpen ? "Mute microphone" : "Unmute microphone"}
-        icon={recording ? "mic" : "mic.slash"}
-        onPress={voiceMode.toggleMute}
-      />
-      {state.microphoneOpen ? (
+      <VoiceModeMuteButton microphoneOpen={state.microphoneOpen} onPress={voiceMode.toggleMute} />
+      {state.microphoneOpen && !transcribing ? (
         <>
           <ComposerActionButton
             accessibilityLabel="Discard this recording"
