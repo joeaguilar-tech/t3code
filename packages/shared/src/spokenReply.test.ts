@@ -27,12 +27,7 @@ describe("splitSpokenReply", () => {
       "See the guide. Use this: The rest is on your screen.",
       true,
     ],
-    [
-      "code-only reply",
-      "```ts\nconsole.log(42);\n```",
-      "I've put it on your screen.",
-      true,
-    ],
+    ["code-only reply", "```ts\nconsole.log(42);\n```", "I've put it on your screen.", true],
     [
       "empty blurb before the divider",
       "\n---\nHere is the result.",
