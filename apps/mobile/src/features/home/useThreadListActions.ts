@@ -584,10 +584,10 @@ export function useThreadListActions(): {
     if (result._tag === "Failure") {
       const error = Cause.squash(result.cause);
       Dialog.alert(
-        "Could not update notifications",
+        m(msg("Could not update notifications")),
         error instanceof Error && error.message.trim().length > 0
           ? error.message
-          : "The notification setting could not be changed.",
+          : m(msg("The notification setting could not be changed.")),
       );
       return false;
     }

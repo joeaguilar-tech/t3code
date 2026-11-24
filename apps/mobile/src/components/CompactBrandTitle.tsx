@@ -1,6 +1,6 @@
 import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceColumns";
 import Constants from "expo-constants";
-import { useGT } from "gt-react-native";
+import { useGT, useMessages } from "gt-react-native";
 import { useState } from "react";
 import { Platform, View } from "react-native";
 
@@ -27,9 +27,11 @@ export function CompactBrandTitle(
   } = {},
 ) {
   const gt = useGT();
+  const messages = useMessages();
   const stageLabel = resolveMobileStageLabel(
     Constants.expoConfig?.extra?.appVariant,
     Constants.expoConfig?.extra?.stageLabel,
+    messages,
   );
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();

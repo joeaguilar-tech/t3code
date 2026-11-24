@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
 // Fork-only: sidebar environment filter.
 import {
   SIDEBAR_ENVIRONMENT_KEYBINDING_COMMANDS,
@@ -70,13 +72,14 @@ export function environmentForShortcutIndex(
 export function buildSidebarEnvironmentPaletteItems(
   environments: readonly { environmentId: EnvironmentId; label: string }[],
   icon: ReactNode,
+  resolve: MessageResolver = m,
 ): CommandPaletteActionItem[] {
   if (environments.length <= 1) return [];
   return [
     {
       kind: "action",
       value: "action:sidebar-environment:all",
-      title: "Show all environments",
+      title: resolve(msg("Show all environments")),
       searchTerms: ["sidebar", "environment", "filter"],
       icon,
       shortcutCommand: "sidebar.environment.all",
@@ -87,7 +90,7 @@ export function buildSidebarEnvironmentPaletteItems(
       return {
         kind: "action",
         value: `action:sidebar-environment:${environment.environmentId}`,
-        title: `Show only ${environment.label}`,
+        title: resolve(msg("Show only {environment}", { environment: environment.label })),
         searchTerms: ["sidebar", "environment", "filter", environment.label],
         icon,
         ...(shortcutCommand ? { shortcutCommand } : {}),

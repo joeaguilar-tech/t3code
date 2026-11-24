@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { hasUnseenCompletion, resolveThreadLastVisitedAt } from "../Sidebar.logic";
@@ -9,6 +10,7 @@ export function AutomationShelfHeader(props: {
   className?: string;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
+  const gt = useGT();
   const unread = useUiStateStore((state) =>
     props.threads.some((thread) =>
       hasUnseenCompletion({
@@ -25,7 +27,7 @@ export function AutomationShelfHeader(props: {
   return (
     <SidebarSectionHeader
       marker="automations-header"
-      label="Automations"
+      label={gt("Automations")}
       count={props.threads.length}
       className={props.className ?? ""}
       toggle={props.toggle}

@@ -277,8 +277,8 @@ export function buildThreadActionMenuItems(
     ...(state.supports.mute
       ? [
           state.isMuted
-            ? { id: "unmute" as const, label: "Unmute notifications", icon: "bell" }
-            : { id: "mute" as const, label: "Mute notifications", icon: "bell-off" },
+            ? { id: "unmute" as const, label: resolve(msg("Unmute notifications")), icon: "bell" }
+            : { id: "mute" as const, label: resolve(msg("Mute notifications")), icon: "bell-off" },
         ]
       : []),
     {

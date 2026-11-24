@@ -2936,8 +2936,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Failed to update notifications",
-                  description: error instanceof Error ? error.message : "An error occurred.",
+                  title: m(msg("Failed to update notifications")),
+                  description:
+                    error instanceof Error ? error.message : m(msg("An error occurred.")),
                 }),
               );
             }

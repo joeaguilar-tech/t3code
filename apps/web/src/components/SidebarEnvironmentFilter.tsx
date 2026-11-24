@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 // Fork-only: sidebar environment filter.
 import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
 import { CheckIcon, GlobeIcon } from "lucide-react";
@@ -12,6 +13,7 @@ function EnvironmentDot({
   dot: "attention" | "unread";
   summary?: boolean;
 }) {
+  const gt = useGT();
   return (
     <span className={summary ? "absolute right-0.5 top-0.5" : "ml-auto"}>
       <span
@@ -21,7 +23,7 @@ function EnvironmentDot({
       {/* The trigger's label already announces the summary dot. */}
       {summary ? null : (
         <span className="sr-only">
-          {dot === "attention" ? "threads needing attention" : "unread threads"}
+          {dot === "attention" ? gt("threads needing attention") : gt("unread threads")}
         </span>
       )}
     </span>
@@ -41,6 +43,7 @@ export function SidebarEnvironmentFilter({
   dots: ReadonlyMap<EnvironmentId, "attention" | "unread">;
   onSelect: (id: EnvironmentId | null) => void;
 }) {
+  const gt = useGT();
   if (environments.length <= 1) return null;
   const selected = environments.find((environment) => environment.environmentId === environmentId);
   const dot = [...dots.values()].includes("attention")
@@ -48,15 +51,18 @@ export function SidebarEnvironmentFilter({
     : dots.size > 0
       ? "unread"
       : null;
+  const label = selected
+    ? gt(
+        "{dot, select, attention {Filter threads by environment: {environment}, another environment needs you} unread {Filter threads by environment: {environment}, another environment has finished threads} other {Filter threads by environment: {environment}}}",
+        { dot: dot ?? "none", environment: selected.label },
+      )
+    : gt(
+        "{dot, select, attention {Filter threads by environment, another environment needs you} unread {Filter threads by environment, another environment has finished threads} other {Filter threads by environment}}",
+        { dot: dot ?? "none" },
+      );
   return (
     <Menu>
-      <MenuTrigger
-        render={
-          <SidebarHeaderIconButton
-            label={`Filter threads by environment${selected ? `: ${selected.label}` : ""}${dot === "attention" ? ", another environment needs you" : dot === "unread" ? ", another environment has finished threads" : ""}`}
-          />
-        }
-      >
+      <MenuTrigger render={<SidebarHeaderIconButton label={label} />}>
         {selected ? (
           <EnvironmentMachineIcon kind={machines.get(selected.environmentId) ?? "server"} />
         ) : (
@@ -69,7 +75,7 @@ export function SidebarEnvironmentFilter({
           <span className="size-4">
             {environmentId === null ? <CheckIcon className="size-4" /> : null}
           </span>
-          All environments
+          <T>All environments</T>
         </MenuItem>
         {environments.map((environment) => (
           <MenuItem

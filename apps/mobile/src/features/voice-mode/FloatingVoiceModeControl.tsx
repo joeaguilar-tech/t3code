@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useSyncExternalStore } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { VoiceModeMuteButton } from "./ThreadVoiceModeToolbar";
 import { voiceModeSessions } from "./voiceModeSessionStore";
 
 export function FloatingVoiceModeControl() {
+  const gt = useGT();
   const control = useSyncExternalStore(voiceModeSessions.subscribe, voiceModeSessions.getControl);
   const insets = useSafeAreaInsets();
   if (!control) return null;
@@ -23,7 +25,7 @@ export function FloatingVoiceModeControl() {
             onPress={control.toggleMute}
           />
           <ComposerActionButton
-            accessibilityLabel="End voice mode"
+            accessibilityLabel={gt("End voice mode")}
             icon="stop.fill"
             variant="danger"
             onPress={control.end}

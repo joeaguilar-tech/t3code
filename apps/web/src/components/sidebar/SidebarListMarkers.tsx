@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -121,6 +122,7 @@ export function SidebarSectionHeader(props: {
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
+  const gt = useGT();
   const shelf =
     props.marker === "working-header"
       ? "working"
@@ -147,7 +149,7 @@ export function SidebarSectionHeader(props: {
               {props.unread ? (
                 <span
                   role="img"
-                  aria-label="Unread threads"
+                  aria-label={gt("Unread threads")}
                   className="size-1.5 rounded-full bg-primary"
                 />
               ) : null}

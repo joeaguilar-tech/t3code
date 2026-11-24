@@ -1379,6 +1379,7 @@ function OpenCommandPaletteDialog(props: {
     ...buildSidebarEnvironmentPaletteItems(
       environmentIdentities,
       <FolderIcon className={ITEM_ICON_CLASS} />,
+      messages,
     ),
   );
 

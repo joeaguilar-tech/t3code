@@ -261,7 +261,7 @@ export function useThreadActionMenu(input: {
           return;
         case "mute":
         case "unmute":
-          await reportFailure("Failed to update notifications", () =>
+          await reportFailure(m(msg("Failed to update notifications")), () =>
             setThreadMuted(threadRef, action === "mute"),
           );
           return;

@@ -1,3 +1,4 @@
+import { msg } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import { useRoute } from "@react-navigation/native";
 import {
@@ -17,6 +18,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Keyboard, Platform } from "react-native";
+import { m } from "../../i18n/messages";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAppForeground } from "../../lib/appState";
 import { rootNavigationRef } from "../../lib/rootNavigation";
@@ -133,7 +135,7 @@ export function useVoiceMode(input: {
       onCaptureChange: setCapturePhase,
       onError(message) {
         end();
-        Dialog.alert("Voice mode stopped", message);
+        Dialog.alert(m(msg("Voice mode stopped")), message);
       },
     });
     const controller = new VoiceModeController({
