@@ -14,10 +14,20 @@ import {
 } from "./index.ts";
 
 function setup(autoMute = true) {
+  let heardSpeech = false;
+  let manuallyOpened = false;
+  const violations = new Map<unknown, Set<string>>();
   let transcript: Parameters<VoiceModeMicrophone["open"]>[0] | undefined;
   const microphone = {
     open: vi.fn<VoiceModeMicrophone["open"]>((callback) => {
-      transcript = callback;
+      heardSpeech = false;
+      const receive = (text: string) => {
+        if (transcript === receive && controller["microphoneWindow"] && text.trim()) {
+          manuallyOpened = false;
+        }
+        return step(() => callback(text));
+      };
+      transcript = receive;
     }),
     cancel: vi.fn(),
     finish: vi.fn(),
@@ -33,6 +43,7 @@ function setup(autoMute = true) {
     speech,
     timer: {
       schedule: (delay, callback) => {
+        if (delay === VOICE_MODE_LISTEN_WINDOW_MS) manuallyOpened = false;
         timers.set(callback, delay);
         return () => timers.delete(callback);
       },
@@ -41,27 +52,84 @@ function setup(autoMute = true) {
     toSpeech: (text) => `spoken: ${text}`,
     autoMute,
   });
-  controller.start();
+  function checkMicrophone() {
+    const state = controller.currentState;
+    if (!state.microphoneOpen) return;
+
+    function require(condition: boolean, reason: string) {
+      if (condition) return;
+      const seen = violations.get(transcript) ?? new Set<string>();
+      if (seen.has(reason)) return;
+      seen.add(reason);
+      violations.set(transcript, seen);
+      expect.soft(condition, reason).toBe(true);
+    }
+
+    require(!state.manuallyMuted, "microphone open while manually muted");
+    require(controller["run"] !== "paused", "microphone open during needs-user");
+    require(!controller["playback"], "microphone open during playback");
+    require(controller["speechQueue"].length === 0, "microphone open with speech queued");
+    if (!autoMute) return;
+
+    const scheduled = [...timers.values()];
+    require(scheduled.includes(VOICE_MODE_LISTEN_WINDOW_MS) ||
+      heardSpeech ||
+      scheduled.includes(15_000) ||
+      // A manual unmute currently opens without a listen-window timer.
+      manuallyOpened, "auto-mute microphone open with no timer or speech activity");
+  }
+
+  function step<T>(action: () => T): T {
+    const result = action();
+    checkMicrophone();
+    if (result instanceof Promise) void result.then(checkMicrophone, checkMicrophone);
+    return result;
+  }
+
+  controller.subscribe(checkMicrophone);
+  step(() => controller.start());
+  const controls = {
+    get currentState() {
+      return controller.currentState;
+    },
+    subscribe: controller.subscribe.bind(controller),
+    cancelTurn: () => step(() => controller.cancelTurn()),
+    end: () => step(() => controller.end()),
+    handleRunEvent: (event: Parameters<VoiceModeController["handleRunEvent"]>[0]) =>
+      step(() => controller.handleRunEvent(event)),
+    interrupt: () => step(() => controller.interrupt()),
+    noteSpeechActivity: () => {
+      if (controller["microphoneWindow"]) heardSpeech = true;
+      step(() => controller.noteSpeechActivity());
+    },
+    tapToSend: () => step(() => controller.tapToSend()),
+    toggleMute: () =>
+      step(() => {
+        manuallyOpened =
+          !controller.currentState.microphoneOpen || controller.currentState.manuallyMuted;
+        controller.toggleMute();
+      }),
+  };
   return {
-    controller,
+    controller: controls,
     microphone,
     speech,
     send,
     timers,
     say: (text: string) => transcript?.(text),
     currentTranscript: () => transcript,
-    running: () => controller.handleRunEvent({ type: "running" }),
+    running: () => controls.handleRunEvent({ type: "running" }),
     finish: (...handledMessageIds: string[]) =>
-      controller.handleRunEvent({ type: "finished", finalMessage: "reply", handledMessageIds }),
+      controls.handleRunEvent({ type: "finished", finalMessage: "reply", handledMessageIds }),
     fail: (...handledMessageIds: string[]) => {
       const event = { type: "failed", handledMessageIds } as const;
-      return controller.handleRunEvent(event);
+      return controls.handleRunEvent(event);
     },
     async elapse(delay: number) {
       const pending = [...timers];
       for (const [callback, scheduled] of pending) {
         if (scheduled !== delay || !timers.delete(callback)) continue;
-        await callback();
+        await step(callback);
       }
     },
   };
@@ -490,6 +558,53 @@ describe("VoiceModeController", () => {
     ]);
   });
 
+  it.each(["drain", "interrupt"] as const)(
+    "keeps auto-mute on after a needs-user pause when speech ends by %s",
+    async (ending) => {
+      const h = setup();
+      const playback = Promise.withResolvers<void>();
+      h.speech.speak.mockReturnValueOnce(playback.promise);
+      await h.say("A");
+      await h.running();
+      const reply = h.finish("id:A");
+      const needsUser = h.controller.handleRunEvent({ type: "needs-user" });
+
+      expect.soft(h.controller.currentState).toMatchObject({
+        phase: "paused",
+        playing: true,
+        microphoneOpen: false,
+      });
+      if (ending === "interrupt") h.controller.interrupt();
+      playback.resolve();
+      await Promise.all([reply, needsUser]);
+      expect(h.speech.speak.mock.calls).toEqual(
+        ending === "drain"
+          ? [["spoken: reply"], [VOICE_MODE_NEEDS_USER_PHRASE]]
+          : [["spoken: reply"]],
+      );
+      await h.running();
+      expect(h.controller.currentState.microphoneOpen).toBe(false);
+    },
+  );
+
+  it("announces a buffered run failure before a follow-up send rejection", async () => {
+    const h = setup();
+    await h.say("A");
+    await h.running();
+    h.controller.toggleMute();
+    const send = Promise.withResolvers<string>();
+    h.send.mockReturnValueOnce(send.promise);
+    const followUp = h.say("B");
+    await h.fail("id:A");
+    expect(h.speech.speak).not.toHaveBeenCalled();
+    send.reject(new Error("send failed"));
+    await followUp;
+    expect(h.speech.speak.mock.calls).toEqual([
+      [VOICE_MODE_FAILED_PHRASE],
+      [VOICE_MODE_SEND_FAILED_PHRASE],
+    ]);
+  });
+
   it("reads a second reply after the first without opening the microphone between them", async () => {
     const h = await followUpDuringReply();
     await h.say("B");
@@ -563,9 +678,8 @@ describe("VoiceModeController", () => {
       await h.say("first");
       await h.running();
       const transcript = h.currentTranscript();
-      const controller: VoiceModeController & { noteSpeechActivity?: () => void } = h.controller;
-      if (activity === "speech activity") controller.noteSpeechActivity?.();
-      else controller.tapToSend();
+      if (activity === "speech activity") h.controller.noteSpeechActivity();
+      else h.controller.tapToSend();
       await h.elapse(VOICE_MODE_WORKING_DELAY_MS);
       expect(h.speech.speak).not.toHaveBeenCalled();
       await transcript?.("follow-up");
@@ -596,7 +710,7 @@ describe("VoiceModeController", () => {
     expect(h.controller.currentState.phase).toBe("listening");
   });
 
-  it("speaks the previous message's buffered reply after a follow-up send rejects", async () => {
+  it("speaks the previous message's buffered reply before announcing a follow-up rejection", async () => {
     const h = setup();
     await h.say("first");
     await h.running();
@@ -608,8 +722,7 @@ describe("VoiceModeController", () => {
     expect(h.speech.speak).not.toHaveBeenCalled();
     send.reject(new Error("send failed"));
     await pending;
-    expect(h.speech.speak).toHaveBeenCalledTimes(2);
-    expect(h.speech.speak).toHaveBeenLastCalledWith("spoken: reply");
+    expect(h.speech.speak.mock.calls).toEqual([["spoken: reply"], [VOICE_MODE_SEND_FAILED_PHRASE]]);
     expect(h.controller.currentState.phase).toBe("listening");
   });
 
