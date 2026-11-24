@@ -1,9 +1,9 @@
 # Fork-only: release T3 Code (Joe) when main differs from the last release or a manual
 # run requests a forced release. Upstream syncs happen outside this workflow. A manual
 # run can optionally merge upstream_ref before releasing. Versions follow the latest
-# upstream release: upstream
-# X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is newer than the last and
-# installed apps update from these releases (the feed comes from GITHUB_REPOSITORY).
+# upstream release: upstream X.Y.Z builds as X.Y.(Z*1000+100+n), so every release is
+# newer than the last and installed apps update from these releases (the feed comes
+# from GITHUB_REPOSITORY).
 # packages/shared/src/forkVersion.ts maps it back for runtime downloads.
 name: Fork release
 
@@ -132,7 +132,8 @@ jobs:
             exit 0
           fi
           git rev-parse --verify MERGE_HEAD >/dev/null
-          # Re-record the measured budget after taking upstream's file to include the fork's tools.
+          # Upstream's measured budget omits the fork's MCP tools, so the gate's
+          # AgentContextBudget test fails until someone re-records the measured values.
           budget=apps/server/src/provider/agentContextBudget.json
           if git diff --name-only --diff-filter=U | grep -qx "$budget"; then
             git checkout --theirs "$budget"
@@ -172,14 +173,17 @@ jobs:
       - name: Check fork features
         id: verify
         if: steps.merge.outputs.blocked != 'true'
+        env:
+          MERGE_CHANGED: ${{ steps.merge.outputs.changed }}
         run: |
           set -o pipefail
           run() {
             echo "::group::$*"
             (
               for arg in "$@"; do
-                if [[ "$arg" == *.test.ts && ! -f "$arg" ]]; then
-                  echo "::error::Missing test file: $arg"
+                if [[ ( "$arg" == *.test.ts || "$arg" == *.test.tsx ) && ! -f "$arg" ]] ||
+                  [[ "$arg" == src/* && "$arg" != *.* && ! -d "$arg" ]]; then
+                  echo "::error::Missing test path: $arg"
                   exit 1
                 fi
               done
@@ -214,7 +218,7 @@ jobs:
             src/features/voice-mode/quietDetector.test.ts \
             src/features/voice-mode/speech.test.ts \
             src/features/voice-mode/threadVoiceMode.test.ts) || ok=false
-          (cd apps/server && run vp test run src/orchestration-v2/ProviderTurnStartService.test.ts -t spoken) || ok=false
+          (cd apps/server && run vp test run src/orchestration-v2/ProviderTurnStartService.test.ts) || ok=false
           (cd apps/server && run vp test run src/orchestration-v2/ProviderTurnControlService.test.ts) || ok=false
           (cd apps/web && run vp test run --project unit \
             src/components/Sidebar.environment.test.ts \
@@ -224,7 +228,7 @@ jobs:
             src/uiStateStore.test.ts) || ok=false
           (cd apps/server && run vp test run src/keybindings.test.ts src/provider/AgentContextBudget.test.ts) || ok=false
           if [[ "$ok" != true ]]; then
-            if [[ -z "$UPSTREAM_REF" ]]; then
+            if [[ "$MERGE_CHANGED" != true ]]; then
               echo "::error::Main fails typecheck or the fork's tests."
               exit 1
             fi
@@ -330,7 +334,7 @@ jobs:
 
       # The sync token cannot comment on issues; the job token can.
       - name: Close blocked-sync issues
-        if: env.UPSTREAM_REF != '' && steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
+        if: steps.merge.outputs.blocked != 'true' && steps.verify.outputs.blocked != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
