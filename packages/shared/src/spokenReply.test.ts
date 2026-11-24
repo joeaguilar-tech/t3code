@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import { splitSpokenReply } from "./spokenReply";
+import { splitSpokenReply } from "./spokenReply.ts";
 
 describe("splitSpokenReply", () => {
   it.each([
