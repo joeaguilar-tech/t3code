@@ -7,7 +7,12 @@ import {
   hydrateImagesFromPersisted,
   useComposerDraftStore,
 } from "../../composerDraftStore";
-import { resolveThreadActionProjectRef } from "../../lib/chatThreadActions";
+import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { createElement } from "react";
+import { render } from "../../../test/render";
+import * as newThread from "../../hooks/useHandleNewThread";
+import * as settings from "../../hooks/useSettings";
+import * as entities from "../../state/entities";
 import * as imageCompression from "../../lib/imageCompression";
 import {
   questionAttachmentDraftId,
@@ -20,6 +25,7 @@ import {
   resolveExistingSnapShotTarget,
   resolveSnapShotAttachmentTarget,
   resolveSnapShotDeliveryTarget,
+  SnapShotCoordinator,
 } from "./SnapShotCoordinator";
 import {
   beginSnapShotAnimation,
@@ -29,6 +35,7 @@ import {
 } from "../../lib/snapShotAnimation";
 
 vi.mock(import("../../hooks/useSettings"), { spy: true });
+vi.mock(import("../../state/entities"), { spy: true });
 vi.mock(import("../../hooks/useHandleNewThread"), { spy: true });
 vi.mock(import("../../lib/snapShotSound"), { spy: true });
 vi.mock(import("../../lib/imageCompression"), { spy: true });
@@ -96,19 +103,58 @@ describe("window capture failures", () => {
 });
 
 describe("window capture target resolution", () => {
-  it("falls back to the unfiltered project when the selected environment has no eligible project", () => {
+  it("opens a grouped root draft when the selected environment has no project", async () => {
     using _env = setup();
-    expect(
-      resolveThreadActionProjectRef(
-        {
-          activeDraftThread: null,
-          activeThread: undefined,
-          defaultProjectRef: null,
-          handleNewThread: async () => undefined,
+    const clientSettings = {
+      ...DEFAULT_CLIENT_SETTINGS,
+      sidebarProjectGroupingMode: "repository" as const,
+      snapShotEnabled: true,
+      snapShotAnimations: false,
+      snapShotPlaySound: false,
+    };
+    vi.mocked(settings.getClientSettings).mockReturnValue(clientSettings);
+    vi.spyOn(settings, "useClientSettings").mockImplementation(
+      (select) => select?.(clientSettings) ?? clientSettings,
+    );
+    const root = {
+      environmentId,
+      id: projectRef.projectId,
+      title: "Root",
+      workspaceRoot: "/repo",
+      repositoryIdentity: {
+        canonicalKey: "repo",
+        rootPath: "/repo",
+        locator: {
+          source: "git-remote" as const,
+          remoteName: "origin",
+          remoteUrl: "https://example.com/repo.git",
         },
-        projectRef,
-      ),
-    ).toEqual(projectRef);
+      },
+      defaultModelSelection: null,
+      scripts: [],
+      createdAt: "2026-11-23T00:00:00.000Z",
+      updatedAt: "2026-11-23T00:00:00.000Z",
+    };
+    const member = { ...root, id: ProjectId.make("member"), workspaceRoot: "/repo/member" };
+    vi.mocked(entities.readProjects).mockReturnValue([member, root]);
+    const handleNewThread = vi.fn(async () => undefined);
+    vi.mocked(newThread.useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: true,
+      routeDraftId: null,
+      routeThreadRef: null,
+      handleNewThread,
+    });
+    vi.stubGlobal("desktopBridge", {
+      onSnapShotEvent: () => () => {},
+      listPendingSnapShots: async () => [{ id: "capture" }],
+    });
+
+    // The coordinator reads its route through the mocked thread hook.
+    await using _screen = await render(createElement(SnapShotCoordinator), { router: false });
+    await vi.waitFor(() => expect(handleNewThread).toHaveBeenCalledExactlyOnceWith(projectRef));
   });
   it("follows a draft to its promoted server thread", () => {
     using _env = setup();
