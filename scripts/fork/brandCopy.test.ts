@@ -1,8 +1,11 @@
+// @effect-diagnostics nodeBuiltinImport:off - The build guard reads source and catalog files directly.
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodeURL from "node:url";
 
 import { describe, expect, it } from "vite-plus/test";
+
+import { EXTRA_COPY } from "./brandCopyExtras.ts";
 
 const root = (path: string) => NodeURL.fileURLToPath(new URL(`../../${path}`, import.meta.url));
 const require = NodeModule.createRequire(root("apps/desktop/package.json"));
@@ -115,13 +118,72 @@ it("resolves the rewritten JSX children by their branded hash", async () => {
   expect(de[hashMessage("Welcome to J3 Code", { $format: "JSX" })]).toContain("J3 Code");
 });
 
-it("rewrites the widget fallback and removes upstream icon dependencies for Metro", async () => {
+it("brands the boot-error heading and keeps upstream reporting copy", async () => {
+  const { createBrandCopy } = await implementation();
+  const path = "apps/web/src/lib/bootError.ts";
+  const code = createBrandCopy("j3", "web")(read(path), root(path));
+  expect(code).toContain('element("h1", { textContent: "J3 Code failed to start" })');
+  expect(code).toContain('issue.searchParams.set("title", "T3 Code failed to start")');
+  expect(code).toContain('console.error("T3 Code failed to start.", error)');
+  expect(code).toContain('console.warn("Could not update T3 Code.", error)');
+});
+
+it("finds every declared extra copy occurrence in source", async () => {
+  const { createBrandCopy } = await implementation();
+  const transforms = {
+    web: createBrandCopy("j3", "web"),
+    desktop: createBrandCopy("j3", "desktop"),
+    mobile: createBrandCopy("j3", "mobile"),
+  };
+  for (const path of Object.keys(EXTRA_COPY)) {
+    const surface = path.split("/")[1] as keyof typeof transforms;
+    expect(transforms[surface](read(path), root(path)), path).not.toBeNull();
+  }
+});
+
+it("rejects missing or additional extra copy occurrences", async () => {
+  const { createBrandCopy } = await implementation();
+  const path = "apps/web/src/lib/bootError.ts";
+  const code = read(path);
+  const transform = createBrandCopy("j3", "web");
+  expect(() =>
+    transform(
+      code.replace(
+        'textContent: "T3 Code failed to start"',
+        'textContent: "T3 Code could not start"',
+      ),
+      root(path),
+    ),
+  ).toThrow("T3 Code failed to start");
+  expect(() =>
+    transform(code + '\nconst duplicate = "T3 Code failed to start";', root(path)),
+  ).toThrow("T3 Code failed to start");
+  expect(() => transform(code.replace('element("h1"', 'element("h2"'), root(path))).toThrow(
+    "T3 Code failed to start",
+  );
+});
+
+it("keeps upstream catalog references", async () => {
+  const { KEEP } = await implementation();
+  expect(Object.keys(KEEP.web)).toEqual(
+    expect.arrayContaining([
+      "0cb5a221e9e13a4e",
+      "73da41e93823fd71",
+      "2e79897eb713ed26",
+      "e17ef8aff174e6fe",
+    ]),
+  );
+  expect(Object.keys(KEEP.mobile)).toContain("e17ef8aff174e6fe");
+  expect(Object.keys(KEEP.desktop)).toContain("a4acf18834787a4f");
+});
+
+it("preserves mobile asset module exports and changes only icon dependencies", async () => {
   const { createBrandCopy } = await implementation();
   const transform = createBrandCopy("j3", "mobile");
-  const widget = "apps/mobile/src/widgets/AgentActivityWidget.tsx";
-  expect(transform(read(widget), root(widget))).toContain("Open J3 Code to load agent activity");
-  const assets = "apps/mobile/src/components/brandAssets.ts";
-  const code = transform(read(assets), root(assets));
-  expect(code).toContain("assets/fork/j3/icon-1024.png");
-  expect(code).not.toMatch(/assets\/(?:dev|nightly|prod)\//);
+  const path = "apps/mobile/src/components/brandAssets.ts";
+  const source = read(path) + "\nexport const futureExport = true;\n";
+  const code = transform(source, root(path));
+  expect(code).toBe(
+    source.replace(/assets\/(?:dev|nightly|prod)\/[^"]+\.png/g, "assets/fork/j3/icon-1024.png"),
+  );
 });
