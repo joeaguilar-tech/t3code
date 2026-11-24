@@ -134,6 +134,8 @@ export class VoiceModeController {
     this.refresh();
   }
 
+  mute(): void {}
+
   toggleMute(): void {
     if (this.lifecycle !== "active") return;
     this.clearListenTimer();

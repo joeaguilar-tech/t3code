@@ -101,6 +101,7 @@ function setup(autoMute = true) {
     handleRunEvent: (event: Parameters<VoiceModeController["handleRunEvent"]>[0]) =>
       step(() => controller.handleRunEvent(event)),
     interrupt: () => step(() => controller.interrupt()),
+    mute: () => step(() => controller.mute()),
     noteSpeechActivity: () => {
       if (capturing) heardSpeech = true;
       step(() => controller.noteSpeechActivity());
@@ -397,6 +398,23 @@ describe("VoiceModeController", () => {
       expect(h.send).toHaveBeenLastCalledWith("redirect");
     },
   );
+
+  it("manually mutes a finishing window and stays muted after the transcript is sent", async () => {
+    const h = setup();
+    h.controller.noteSpeechActivity();
+    h.controller.tapToSend();
+
+    expect(h.controller.currentState.microphoneOpen).toBe(false);
+    h.controller.mute();
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+    expect(h.microphone.cancel).not.toHaveBeenCalled();
+    await h.say("first");
+    expect(h.send.mock.calls).toEqual([["first"]]);
+
+    h.controller.mute();
+    await h.finish("id:first");
+    expect(h.controller.currentState).toMatchObject({ manuallyMuted: true, microphoneOpen: false });
+  });
 
   it("sends a long utterance from a post-reply window that heard speech", async () => {
     const h = setup();
