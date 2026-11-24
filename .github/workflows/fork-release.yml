@@ -197,7 +197,7 @@ jobs:
           (cd packages/shared && run vp test run src/forkBrand.test.ts) || ok=false
           (cd apps/desktop && run vp test run src/app/DesktopAppIdentity.test.ts) || ok=false
           (cd apps/web && run vp test run --project unit src/branding.logic.test.ts) || ok=false
-          run vp test run scripts/build-desktop-artifact.test.ts -t "while preserving update identity" || ok=false
+          run vp test run scripts/build-desktop-artifact.identity.test.ts || ok=false
           run vp test run scripts/apply-web-brand-assets.test.ts || ok=false
           run vp run typecheck || ok=false
           (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
@@ -216,6 +216,7 @@ jobs:
           (cd apps/mobile && run vp test run \
             app.config.test.ts \
             src/components/brandAssets.test.ts \
+            src/widgets/agentActivityWidgetTimeline.test.ts \
             src/features/voice-input/VoiceInputProvider.test.ts \
             src/features/voice-input/environmentTranscriber.test.ts \
             src/features/voice-input/lazyVoiceRecorder.test.ts \
@@ -314,8 +315,8 @@ jobs:
           brand_name="$(node scripts/fork/brand-field.ts name)"
           for attempt in 1 2 3; do
             hdiutil create -volname "$brand_name $VERSION" -srcfolder "$stage" \
-              -format UDZO -ov "release/T3-Code-$VERSION-arm64.dmg" && break
-            rm -f "release/T3-Code-$VERSION-arm64.dmg"
+              -format UDZO -ov "release/J3-Code-$VERSION-arm64.dmg" && break
+            rm -f "release/J3-Code-$VERSION-arm64.dmg"
             (( attempt < 3 )) || echo "::warning::No installer DMG this release; updates use the zip."
             sleep 10
           done

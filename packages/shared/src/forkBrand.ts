@@ -12,6 +12,7 @@ const j3Brand = {
     windowsIconIco: `${root}/windows.ico`,
     mobile: {
       iconPng: icon1024,
+      widgetMarkSvg: `${root}/widget-mark.svg`,
       backgroundColor: "#0F5C5C",
       androidForegroundPng: `${root}/android-foreground.png`,
       androidMonochromePng: `${root}/android-monochrome.png`,
@@ -30,6 +31,10 @@ const j3Brand = {
 
 export function resolveForkBrand(selection: string | null | undefined) {
   return selection === "j3" ? j3Brand : null;
+}
+
+export function resolveAppActivityGlyph(brand: ReturnType<typeof resolveForkBrand>) {
+  return brand ? "terminal" : "t3-wordmark";
 }
 
 export function formatForkDisplayName(name: string, stage: string): string {

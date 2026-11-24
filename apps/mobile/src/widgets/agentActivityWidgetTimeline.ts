@@ -1,6 +1,7 @@
 import type { RelayAgentActivityAggregateState } from "@t3tools/contracts/relay";
 import { msg } from "gt-react-native";
 
+import { MOBILE_PRODUCT_NAME } from "../lib/mobileProductBrand";
 import { m, type MessageResolver } from "../i18n/messages";
 
 import type { AgentActivityProps, AgentActivityText } from "./AgentActivity";
@@ -73,7 +74,7 @@ export function agentActivityWidgetTimeline(
   if (source.kind !== "snapshot" || !source.aggregate) {
     const props: AgentActivityProps = {
       text: agentActivityText(0, resolve),
-      title: "T3 Code",
+      title: MOBILE_PRODUCT_NAME,
       subtitle:
         source.kind === "signed-out"
           ? resolve(msg("Sign in to {product} to see agents", { product: "T3 Connect" }))

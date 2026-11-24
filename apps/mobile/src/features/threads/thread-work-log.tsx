@@ -68,6 +68,8 @@ import {
 } from "@t3tools/client-runtime/work-log/command-label";
 
 import { AppText as Text } from "../../components/ui/AppText";
+import { resolveAppActivityGlyph } from "@t3tools/shared/forkBrand";
+import { mobileForkBrand } from "../../lib/mobileProductBrand";
 import { T3Wordmark } from "../../components/T3Wordmark";
 import { BrowserAppIcon } from "./BrowserAppIcon";
 import { useAppActive, useReduceMotionEnabled } from "../../lib/appState";
@@ -136,7 +138,7 @@ function WorkLogIcon(props: {
   readonly highlighted?: boolean;
 }) {
   const colorClassName = props.highlighted ? "accent-foreground" : props.colorClassName;
-  if (props.icon === "t3-code") {
+  if (props.icon === "t3-code" && resolveAppActivityGlyph(mobileForkBrand) === "t3-wordmark") {
     return (
       <T3Wordmark height={10} {...(colorClassName ? { colorClassName } : { color: props.color })} />
     );
@@ -152,13 +154,15 @@ function WorkLogIcon(props: {
   return (
     <SymbolView
       name={
-        props.icon === "pull-request"
-          ? PullRequestGlyph.pullRequest
-          : props.icon === "browser"
-            ? { ios: "globe", android: "public" }
-            : props.icon === "device"
-              ? { ios: "iphone", android: "smartphone" }
-              : props.icon
+        props.icon === "t3-code"
+          ? { ios: "terminal", android: "terminal" }
+          : props.icon === "pull-request"
+            ? PullRequestGlyph.pullRequest
+            : props.icon === "browser"
+              ? { ios: "globe", android: "public" }
+              : props.icon === "device"
+                ? { ios: "iphone", android: "smartphone" }
+                : props.icon
       }
       size={14}
       weight="medium"

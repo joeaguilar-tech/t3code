@@ -984,6 +984,10 @@ interface StagePackageJson {
   };
 }
 
+export function createStagePackageJson(fields: Omit<StagePackageJson, "name">): StagePackageJson {
+  return { name: "t3code", ...fields };
+}
+
 export const STAGE_INSTALL_ARGS = ["install", "--prod"] as const;
 export const DESKTOP_ELECTRON_LANGUAGES = ["en-US"] as const;
 export const DESKTOP_FILE_EXCLUSIONS = [
@@ -3986,8 +3990,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
-  const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+  const stagePackageJson = createStagePackageJson({
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -4022,7 +4025,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     devDependencies: {
       electron: electronVersion,
     },
-  };
+  });
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);

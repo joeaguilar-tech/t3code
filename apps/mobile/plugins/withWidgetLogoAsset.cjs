@@ -27,11 +27,11 @@ const IMAGE_SET_CONTENTS =
     2,
   ) + "\n";
 
-function withAssetFiles(config) {
+function withAssetFiles(config, sourcePath) {
   return withDangerousMod(config, [
     "ios",
     (cfg) => {
-      const source = path.join(cfg.modRequest.projectRoot, "assets", "widget", SVG_NAME);
+      const source = path.resolve(cfg.modRequest.projectRoot, sourcePath);
       const catalogDir = path.join(cfg.modRequest.platformProjectRoot, TARGET_NAME, CATALOG_NAME);
       const imageSetDir = path.join(catalogDir, IMAGE_SET);
       fs.mkdirSync(imageSetDir, { recursive: true });
@@ -50,6 +50,9 @@ function withAssetWiring(config) {
   });
 }
 
-module.exports = function withWidgetLogoAsset(config) {
-  return withAssetWiring(withAssetFiles(config));
+module.exports = function withWidgetLogoAsset(
+  config,
+  { sourcePath = path.join("assets", "widget", SVG_NAME) } = {},
+) {
+  return withAssetWiring(withAssetFiles(config, sourcePath));
 };

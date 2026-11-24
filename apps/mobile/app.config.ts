@@ -225,7 +225,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: `Shows the current state of active ${productName} agents.`,
         android: null,
         ios: {
           supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
@@ -492,7 +492,17 @@ const config: ExpoConfig = {
     // Compile out the unused pedometer to avoid an iOS motion purpose string.
     ["expo-sensors", { motionPermission: false }],
     // Mods run in reverse order; expo-widgets must create and wipe the target before assets are added.
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
+    ...(!isIosPersonalTeamBuild
+      ? [
+          mobileArt
+            ? ([
+                "./plugins/withWidgetLogoAsset.cjs",
+                { sourcePath: fromRepoRoot(mobileArt.widgetMarkSvg) },
+              ] satisfies NonNullable<ExpoConfig["plugins"]>[number])
+            : "./plugins/withWidgetLogoAsset.cjs",
+          widgetsPlugin,
+        ]
+      : []),
     "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidInputBackground.cjs",

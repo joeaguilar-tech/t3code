@@ -47,10 +47,15 @@ async function renderIco(sizes: readonly number[]) {
 await Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const svg = yield* fs.readFileString(source);
-  const mark = svg.replace(/<rect[^>]*\/>/u, "");
-  const renderAndroidLayer = (art: string) => sharp(Buffer.from(art)).resize(432, 432).png();
+  const mark = svg.replace(/^[ \t]*<rect[^>]*\/>\n/mu, "");
+  const renderAndroidLayer = (art: string) =>
+    sharp(Buffer.from(art))
+      .resize(336, 336)
+      .extend({ top: 48, bottom: 48, left: 48, right: 48, background: "#00000000" })
+      .png();
   yield* Effect.all(
     [
+      fs.writeFileString(mobile.widgetMarkSvg, mark),
       renderAsset(macIconPng, () => render(1024).toFile(macIconPng)),
       renderAsset(mobile.androidForegroundPng, () =>
         renderAndroidLayer(mark).toFile(mobile.androidForegroundPng),
