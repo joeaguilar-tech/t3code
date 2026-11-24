@@ -1,3 +1,7 @@
+import { createVoiceModeAudio } from "../voice-mode/voiceModeAudio";
+import { VOICE_QUIET_SAMPLE_COUNT } from "../voice-mode/quietDetector";
+vi.mock("../voice-mode/speech", () => ({ speak: vi.fn(), stopSpeaking: vi.fn() }));
+
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { PreparedVoiceTranscription } from "@t3tools/client-runtime/voice-input";
 import { resetVoiceInputGlobalsForTests } from "../../../../../packages/client-runtime/src/voice-input/controller";
@@ -466,5 +470,65 @@ describe("global voice input", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     session.setOwnerFocused("first", false);
     expect(session.getSnapshot().focusedOwners.size).toBe(0);
+  });
+});
+
+describe("voice mode microphone", () => {
+  it("routes quiet detection through the controller before stopping", async () => {
+    const { session } = createSession();
+    const started = Promise.withResolvers<void>();
+    const start = session.start.bind(session);
+    let sample: ((level: number) => void) | undefined;
+    using _start = vi.spyOn(session, "start").mockImplementation(async (target) => {
+      sample = target.onMeteringSample;
+      await start(target);
+      started.resolve();
+    });
+    const requestFinish = vi.fn();
+    const options = {
+      session,
+      ownerKey: "voice-mode",
+      requestFinish,
+      noteSpeechActivity: vi.fn(),
+      onError: vi.fn(),
+      onCaptureChange: vi.fn(),
+    };
+    const audio = createVoiceModeAudio(options);
+    try {
+      audio.microphone.open(vi.fn(async () => {}));
+      await started.promise;
+      sample?.(1);
+      for (let i = 0; i < VOICE_QUIET_SAMPLE_COUNT; i++) sample?.(0);
+      expect(requestFinish).toHaveBeenCalledOnce();
+      expect(session.controller.currentState.phase).toBe("recording");
+    } finally {
+      audio.microphone.cancel();
+      audio.dispose();
+    }
+  });
+
+  it("delivers an empty result when finish was requested but capture cannot start", async () => {
+    const { session } = createSession();
+    using _start = vi.spyOn(session, "start").mockResolvedValue(undefined);
+    const error = Promise.withResolvers<void>();
+    const onTranscript = vi.fn(async (_text: string) => {});
+    const options = {
+      session,
+      ownerKey: "voice-mode",
+      requestFinish: vi.fn(),
+      noteSpeechActivity: vi.fn(),
+      onError: () => error.resolve(),
+      onCaptureChange: vi.fn(),
+    };
+    const audio = createVoiceModeAudio(options);
+    try {
+      audio.microphone.open(onTranscript);
+      audio.microphone.finish();
+      await error.promise;
+      expect(onTranscript).toHaveBeenCalledExactlyOnceWith("");
+    } finally {
+      audio.microphone.cancel();
+      audio.dispose();
+    }
   });
 });

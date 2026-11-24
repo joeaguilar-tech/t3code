@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   serializeComposerMessageForServer,
   uploadedComposerContext,
@@ -9,6 +9,8 @@ import {
   voiceModeAutoMute,
   type ThreadVoiceState,
 } from "./threadVoiceMode";
+
+import { createVoiceModeCover } from "./voiceModeCover";
 
 const firstRun = { id: "first", userMessageId: "original", status: "running" } as const;
 const queuedRun = { id: "next", userMessageId: "queued", status: "queued" } as const;
@@ -55,6 +57,16 @@ describe("voice mode run feed", () => {
     expect(deriveVoiceRunEvents(paused, busy)).toEqual([{ type: "running" }]);
   });
 
+  it("settles a stopped run silently, even with a partial answer", () => {
+    expect(
+      deriveVoiceRunEvents(busy, {
+        ...busy,
+        runs: [{ ...firstRun, status: "interrupted" }, queuedRun],
+        messages: [message("partial", "first", "assistant"), message("steer", "first", "user")],
+      }),
+    ).toEqual([{ type: "finished", finalMessage: "", handledMessageIds: ["original", "steer"] }]);
+  });
+
   it("reports a newly failed run without replaying historical failures", () => {
     const failed: ThreadVoiceState = {
       ...busy,
@@ -96,4 +108,45 @@ describe("spoken dispatch", () => {
 it("defaults auto-mute on while preserving an explicit opt-out", () => {
   expect(voiceModeAutoMute(undefined)).toBe(true);
   expect(voiceModeAutoMute(false)).toBe(false);
+});
+
+describe("voice mode covering screens", () => {
+  it("keeps mute and end reachable with the current microphone state on a file page", () => {
+    const cover = createVoiceModeCover();
+    const toggleMute = vi.fn();
+    const end = vi.fn();
+    cover.update(
+      [
+        { key: "own", name: "Thread" },
+        { key: "file", name: "ThreadFile" },
+      ],
+      "own",
+    );
+    expect(cover.placement).toBe("floating");
+    const control = { microphoneOpen: true, toggleMute, end };
+    expect(cover.control(control)).toBe(control);
+    cover.control(control).toggleMute();
+    expect(toggleMute).toHaveBeenCalledOnce();
+    cover.control({ ...control, microphoneOpen: false }).end();
+    expect(end).toHaveBeenCalledOnce();
+  });
+
+  it("silences a sheet and keeps capture muted after returning until explicitly unmuted", () => {
+    const cover = createVoiceModeCover();
+    const owner = { key: "own", name: "Thread" };
+    cover.update([owner, { key: "queue", name: "ThreadQueue" }], "own");
+    expect(cover.placement).toBe("silent");
+    expect(cover.captureMuted).toBe(true);
+    expect(cover.speechSuppressed).toBe(true);
+    cover.unmute();
+    expect(cover.captureMuted).toBe(true);
+
+    cover.update([owner], "own");
+    expect(cover.placement).toBe("inline");
+    expect(cover.speechSuppressed).toBe(false);
+    expect(cover.captureMuted).toBe(true);
+    expect(cover.control({ microphoneOpen: true }).microphoneOpen).toBe(false);
+    cover.unmute();
+    expect(cover.captureMuted).toBe(false);
+  });
 });
