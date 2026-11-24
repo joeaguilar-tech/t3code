@@ -317,40 +317,56 @@ beforeEach(() => {
 
 describe("spoken composer sends", () => {
   it.each([
-    { scenario: "Stop reached the run", status: "stopping", retryFails: false, queue: false },
+    { scenario: "Stop reached the run", rejection: "stopping", retryFails: false, queue: false },
     {
-      scenario: "the run ended and the retry fails",
-      status: "interrupted",
+      scenario: "Stop reached the run and the retry fails",
+      rejection: "stopping",
       retryFails: true,
       queue: false,
     },
-    { scenario: "follow-ups are queued", status: null, retryFails: false, queue: true },
-  ])("handles follow-ups when $scenario", async ({ status, retryFails, queue }) => {
+    {
+      scenario: "the target has no root node",
+      rejection: "other",
+      retryFails: false,
+      queue: false,
+    },
+    { scenario: "the socket is lost", rejection: "socket", retryFails: false, queue: false },
+    { scenario: "follow-ups are queued", rejection: null, retryFails: false, queue: true },
+  ])("handles follow-ups when $scenario", async ({ rejection, retryFails, queue }) => {
     state.grantedEnvironments.add("secondary");
     state.pendingRequests = { approvals: [], userInputs: [] };
     state.thread.runtime = { status: "running", activeRunId: "run" };
     state.canPromoteToSteer = true;
     state.followUpBehavior = queue ? "queue" : "steer";
-    if (status !== null) {
-      const detail = `Target run run is ${status} and cannot be steered.`;
-      state.startTurn
-        .mockResolvedValueOnce(
-          AsyncResult.failure(
-            Cause.fail(
-              new OrchestrationV2DispatchCommandError({
-                commandId: CommandId.make("command"),
-                commandType: "message.dispatch",
-                message: detail,
-                detail,
-              }),
-            ),
+    const retries = rejection === "stopping";
+    const sendFails = retryFails || rejection === "other" || rejection === "socket";
+    if (rejection === "socket") {
+      state.startTurn.mockResolvedValueOnce(
+        AsyncResult.failure(Cause.fail(new Error("socket closed"))),
+      );
+    } else if (rejection !== null) {
+      const detail = retries
+        ? "Target run run is stopping and cannot be steered."
+        : "Target run run has no root node.";
+      state.startTurn.mockResolvedValueOnce(
+        AsyncResult.failure(
+          Cause.fail(
+            new OrchestrationV2DispatchCommandError({
+              commandId: CommandId.make("command"),
+              commandType: "message.dispatch",
+              message: detail,
+              detail,
+            }),
           ),
-        )
-        .mockResolvedValueOnce(
+        ),
+      );
+      if (retries) {
+        state.startTurn.mockResolvedValueOnce(
           retryFails
             ? AsyncResult.failure(Cause.fail(new Error("Send failed")))
             : AsyncResult.success({ sequence: 1 }),
         );
+      }
     }
 
     const { sendSpokenMessage } = useThreadComposerState(NO_SIDE_CHATS);
@@ -417,16 +433,17 @@ describe("spoken composer sends", () => {
       );
     } else {
       expect(state.enqueue).not.toHaveBeenCalled();
-      expect(state.startTurn.mock.calls.map(([request]) => request.input.dispatchMode)).toEqual([
-        "steer",
-        "start",
-      ]);
-      expect(state.startTurn.mock.calls[1]?.[0].input.commandId).not.toBe(
-        state.startTurn.mock.calls[0]?.[0].input.commandId,
+      expect(state.startTurn.mock.calls.map(([request]) => request.input.dispatchMode)).toEqual(
+        retries ? ["steer", "start"] : ["steer"],
       );
-      expect(state.startTurn.mock.calls[1]?.[0].input.message).toEqual(
-        state.startTurn.mock.calls[0]?.[0].input.message,
-      );
+      if (retries) {
+        expect(state.startTurn.mock.calls[1]?.[0].input.commandId).not.toBe(
+          state.startTurn.mock.calls[0]?.[0].input.commandId,
+        );
+        expect(state.startTurn.mock.calls[1]?.[0].input.message).toEqual(
+          state.startTurn.mock.calls[0]?.[0].input.message,
+        );
+      }
     }
     await controller.handleRunEvent({
       type: "finished",
@@ -435,8 +452,21 @@ describe("spoken composer sends", () => {
     });
     checkMicrophone();
     expect(speak).toHaveBeenCalledExactlyOnceWith(
-      retryFails ? VOICE_MODE_SEND_FAILED_PHRASE : "Reply",
+      sendFails ? VOICE_MODE_SEND_FAILED_PHRASE : "Reply",
     );
+    if (sendFails) {
+      expect
+        .soft(state.mergeDraft)
+        .toHaveBeenCalledExactlyOnceWith(
+          expect.any(String),
+          expect.objectContaining({ text: "spoken follow-up", attachments: [] }),
+        );
+    } else {
+      expect(state.mergeDraft).not.toHaveBeenCalled();
+    }
+    for (const [request] of state.startTurn.mock.calls) {
+      expect(request.input.resendAfterSocketLoss).toBe(false);
+    }
   });
 });
 
