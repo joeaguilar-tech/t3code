@@ -3,8 +3,10 @@ export const VOICE_MODE_WORKING_DELAY_MS = 4_000;
 export const VOICE_MODE_WORKING_PHRASE = "Working on it";
 export const VOICE_MODE_NEEDS_USER_PHRASE = "The agent needs you. Check the screen.";
 export const VOICE_MODE_FAILED_PHRASE = "That run failed. Check the screen.";
+/** @public */
 export const VOICE_MODE_EARLIER_REQUEST_FAILED_PHRASE =
   "An earlier request failed. Check the screen.";
+/** @public */
 export const VOICE_MODE_SEND_FAILED_PHRASE = "That message didn't send. Check the screen.";
 
 export type VoiceModePhase =
@@ -60,7 +62,7 @@ type RunResult = Extract<VoiceModeRunEvent, { type: "finished" | "failed" }>;
 
 type MicrophoneWindow = {
   heardSpeech: boolean;
-  finishing?: PromiseWithResolvers<void>;
+  finishing?: { promise: Promise<void>; resolve: () => void };
 };
 
 export class VoiceModeController {
@@ -150,7 +152,11 @@ export class VoiceModeController {
   tapToSend(): void {
     const window = this.microphoneWindow;
     if (!window || window.finishing) return;
-    window.finishing = Promise.withResolvers<void>();
+    let resolve!: () => void;
+    const promise = new Promise<void>((finish) => {
+      resolve = finish;
+    });
+    window.finishing = { promise, resolve };
     this.clearListenTimer();
     this.dependencies.microphone.finish();
   }
