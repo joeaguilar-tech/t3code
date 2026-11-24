@@ -69,7 +69,7 @@ type SpeechRequest = {
 };
 
 type MicrophoneWindow = {
-  postReply: boolean;
+  timed: boolean;
   finishing: boolean;
   cancelTranscriptionTimer?: () => void;
   protection?: {
@@ -120,7 +120,6 @@ export class VoiceModeController {
   start(): void {
     if (this.lifecycle !== "idle") return;
     this.lifecycle = "active";
-    this.openListenWindow();
     this.refresh();
   }
 
@@ -144,7 +143,7 @@ export class VoiceModeController {
       this.cancelTurn();
       return;
     }
-    if (window) window.postReply = false;
+    if (window) window.timed = false;
     if (!this.manuallyMuted) this.wantsMicrophone = true;
     this.refresh();
   }
@@ -153,7 +152,7 @@ export class VoiceModeController {
     if (!this.playback && this.speechQueue.length === 0) return;
     this.stopPlayback();
     this.manuallyMuted = false;
-    if (this.run !== "paused") this.openListenWindow();
+    if (this.run !== "paused") this.requestListenWindow();
     this.refresh();
   }
 
@@ -257,7 +256,7 @@ export class VoiceModeController {
   }
 
   private muteAfterIncompleteWindow(window: MicrophoneWindow): void {
-    if (window.postReply && window.protection) this.wantsMicrophone = false;
+    if (window.timed && window.protection) this.wantsMicrophone = false;
   }
 
   private async receiveTranscript(window: MicrophoneWindow, transcript: string): Promise<void> {
@@ -354,15 +353,18 @@ export class VoiceModeController {
       this.pendingSends.size === 0 &&
       this.latestMessageId === undefined
     ) {
-      this.openListenWindow();
+      this.requestListenWindow();
     }
     this.refresh();
   }
 
-  private openListenWindow(): void {
+  private requestListenWindow(): void {
     this.wantsMicrophone = true;
     this.clearListenTimer();
-    if (!this.autoMute || this.manuallyMuted) return;
+  }
+
+  private armListenTimer(): void {
+    if (!this.autoMute || this.cancelListenTimer) return;
     this.cancelListenTimer = this.dependencies.timer.schedule(VOICE_MODE_LISTEN_WINDOW_MS, () => {
       this.cancelListenTimer = undefined;
       this.wantsMicrophone = false;
@@ -421,8 +423,9 @@ export class VoiceModeController {
     const canOpenMicrophone = this.canOpenMicrophone();
     if (canOpenMicrophone) {
       if (!this.microphoneWindow) {
+        this.armListenTimer();
         const window = {
-          postReply: this.cancelListenTimer !== undefined,
+          timed: this.cancelListenTimer !== undefined,
           finishing: false,
         };
         this.microphoneWindow = window;
