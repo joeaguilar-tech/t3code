@@ -181,7 +181,7 @@ export function AgentActivityWidget(
             lineLimit(1),
           ]}
         >
-          {summary || (accessory ? "T3 Code" : "")}
+          {summary || (accessory ? (props.title ?? "T3 Code") : "")}
         </Text>
         <Spacer minLength={0} />
       </HStack>

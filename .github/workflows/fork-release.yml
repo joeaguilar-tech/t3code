@@ -193,6 +193,17 @@ jobs:
             echo "::endgroup::"
             return "$s"
           }
+          run_filtered() {
+            NO_COLOR=1 run "$@" | awk '
+              { print }
+              /^[[:space:]]*Tests[[:space:]]+[1-9][0-9]* passed/ { passed = 1 }
+              END {
+                if (!passed) {
+                  print "::error::No tests passed"
+                  exit 1
+                }
+              }'
+          }
           ok=true
           (cd packages/shared && run vp test run src/forkBrand.test.ts) || ok=false
           (cd apps/desktop && run vp test run src/app/DesktopAppIdentity.test.ts) || ok=false
@@ -200,9 +211,9 @@ jobs:
           run vp test run scripts/build-desktop-artifact.identity.test.ts || ok=false
           run vp test run scripts/apply-web-brand-assets.test.ts || ok=false
           run vp run typecheck || ok=false
-          (cd apps/server && run vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
-          (cd packages/client-runtime && run vp test run src/state -t "mute|Mute") || ok=false
-          (cd apps/web && run vp test run --project unit src/hooks src/components -t "mute|Mute") || ok=false
+          (cd apps/server && run_filtered vp test run src/relay src/orchestration-v2 -t "mute|Mute") || ok=false
+          (cd packages/client-runtime && run_filtered vp test run src/state -t "mute|Mute") || ok=false
+          (cd apps/web && run_filtered vp test run --project unit src/hooks src/components -t "mute|Mute") || ok=false
           (cd apps/web && run vp test run --project unit src/components/Sidebar.logic.test.ts src/components/Sidebar.drag.test.ts) || ok=false
           (cd packages/client-runtime && run vp test run src/state/automationThreads.test.ts) || ok=false
           (cd packages/shared && run vp test run src/cliRelease.test.ts) || ok=false
@@ -313,10 +324,11 @@ jobs:
             { echo "::error::Release app is not signed by team $APPLE_TEAM_ID."; exit 1; }
           ln -s /Applications "$stage/Applications"
           brand_name="$(node scripts/fork/brand-field.ts name)"
+          dmg_path="release/${brand_name// /-}-$VERSION-arm64.dmg"
           for attempt in 1 2 3; do
             hdiutil create -volname "$brand_name $VERSION" -srcfolder "$stage" \
-              -format UDZO -ov "release/J3-Code-$VERSION-arm64.dmg" && break
-            rm -f "release/J3-Code-$VERSION-arm64.dmg"
+              -format UDZO -ov "$dmg_path" && break
+            rm -f "$dmg_path"
             (( attempt < 3 )) || echo "::warning::No installer DMG this release; updates use the zip."
             sleep 10
           done

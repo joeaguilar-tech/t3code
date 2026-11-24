@@ -135,6 +135,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 const variant = VARIANT_CONFIG[APP_VARIANT];
 const brand = resolveForkBrand(repoEnv.T3CODE_BRAND);
 const productName = brand?.name ?? "T3 Code";
+const iosDisplayName = repoEnv.T3CODE_IOS_DISPLAY_NAME?.trim() || brand?.name;
 const mobileArt = brand?.assets.mobile;
 const assets = mobileArt
   ? {
@@ -300,9 +301,7 @@ const config: ExpoConfig = {
     },
     infoPlist: {
       // Home-screen label only; renaming `name` would also rename the native target.
-      ...(repoEnv.T3CODE_IOS_DISPLAY_NAME?.trim()
-        ? { CFBundleDisplayName: repoEnv.T3CODE_IOS_DISPLAY_NAME.trim() }
-        : {}),
+      ...(iosDisplayName ? { CFBundleDisplayName: iosDisplayName } : {}),
       UISupportedInterfaceOrientations: [
         "UIInterfaceOrientationPortrait",
         "UIInterfaceOrientationLandscapeLeft",
@@ -396,7 +395,15 @@ const config: ExpoConfig = {
     "expo-sqlite",
     ...(isIosPersonalTeamBuild
       ? [sharingPlugin]
-      : ["./plugins/withShareExtensionDisplayName.cjs", sharingPlugin]),
+      : [
+          brand
+            ? ([
+                "./plugins/withShareExtensionDisplayName.cjs",
+                { displayName: productName },
+              ] satisfies NonNullable<ExpoConfig["plugins"]>[number])
+            : "./plugins/withShareExtensionDisplayName.cjs",
+          sharingPlugin,
+        ]),
     [
       "expo-notifications",
       {
@@ -502,6 +509,11 @@ const config: ExpoConfig = {
             : "./plugins/withWidgetLogoAsset.cjs",
           widgetsPlugin,
         ]
+      : []),
+    ...(brand
+      ? ([
+          ["./plugins/withAndroidLauncherLabel.cjs", { displayName: productName }],
+        ] satisfies NonNullable<ExpoConfig["plugins"]>)
       : []),
     "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
