@@ -12,11 +12,17 @@ const INLINE_WORD = /^[\p{L}\p{N}]+(?:[._-][\p{L}\p{N}]+)*$/u;
 const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 const FENCE_MARKER = /^\s*(`{3,}|~{3,})(.*)$/;
 const LIST_MARKER = /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/;
-const ROOTED_PATH = /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2})?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/g;
+const ROOTED_PATH =
+  /(?<![\w./\\])(?:[A-Za-z]:|~|\.{1,2}|\.[\w-][\w.-]*)?[/\\][\w.-]+(?:[/\\][\w.-]+)*(?<=[\w-])/;
 const RELATIVE_FILE_PATH =
-  /(?<![\w./\\])(?=[a-z_.]|[\w.-]+(?:[/\\][\w.-]+)*[/\\][a-z_])[\w.-]+(?:[/\\][\w.-]+)*[/\\][\w-]+(?:\.[A-Za-z][\w-]*)+/g;
+  /(?<![\w./\\])(?=[a-z_.]|[\w.-]+(?:[/\\][\w.-]+)*[/\\][a-z_])[\w.-]+(?:[/\\][\w.-]+)*[/\\][\w-]+(?:\.[A-Za-z][\w-]*)+/;
+const FILE_PATH = new RegExp(
+  String.raw`(?:\b([Tt]he|[Tt]his|[Tt]hat|[Yy]our|[Aa]n?)\s+)?(?:${ROOTED_PATH.source}|${RELATIVE_FILE_PATH.source})(?:\s+(file|folder)\b(?![./\\-][\w.-]))?`,
+  "g",
+);
 const BARE_URL =
-  /(?<![\w./\\@-])(?:(?:https?|ftp):\/\/[^\s<>"']+|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\/[^\s<>"']*)/gi;
+  /(?<![\w./\\@-])(?:(?:https?|ftp):\/\/[^\s<>"']+|(?:[\w-]+(?:\.[\w-]+)*\.(?!(?:js|ts|jsx|tsx|mjs|cjs|json|md|py|rb|rs|go|sh|css|html|ya?ml|toml|txt)\/)[a-z]{2,}|(?:localhost|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?)\/[^\s<>"']*)/gi;
+const INLINE_FORMATTING_TAG = /^(?:b|i|em|strong|u|s|del|kbd|code|sub|sup|mark|br|span)$/i;
 const INLINE_CODE_RUN = new RegExp(
   `\\b${SPOKEN_REPLY_INLINE_CODE}(?:(?:,\\s*(?:(?:and|or)\\s+)?|\\s+(?:and|or)\\s+)${SPOKEN_REPLY_INLINE_CODE}\\b)+`,
   "g",
@@ -119,9 +125,11 @@ function cleanProse(lines: string[]) {
     droppedContent = true;
     return SPOKEN_REPLY_URL + suffix;
   };
-  const replacePath = () => {
+  const replacePath = (_match: string, determiner?: string, label?: string) => {
     droppedContent = true;
-    return SPOKEN_REPLY_PATH;
+    if (!determiner && !label) return SPOKEN_REPLY_PATH;
+    const article = determiner?.replace(/n$/, "") ?? "a";
+    return `${article} ${label ?? "file"}`;
   };
   const spoken = prose
     .join("\n")
@@ -138,11 +146,14 @@ function cleanProse(lines: string[]) {
     .replace(/<(?:https?|ftp|mailto):[^>\s]+>/gi, () => replaceUrl())
     .replace(BARE_URL, (url) => replaceUrl(urlSuffix(url)))
     .replace(
-      /(?<!\w)<[A-Za-z][\w-]*(?:\s+[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))*\s*\/?>|<\/[A-Za-z][\w-]*\s*>/g,
-      "",
+      /(?<!\w)<([A-Za-z][\w-]*)(?:\s+[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))*\s*\/?>|<\/([A-Za-z][\w-]*)\s*>/g,
+      (_match, opening: string | undefined, closing: string | undefined) => {
+        if (INLINE_FORMATTING_TAG.test(opening ?? closing ?? "")) return "";
+        droppedContent = true;
+        return SPOKEN_REPLY_INLINE_CODE;
+      },
     )
-    .replace(ROOTED_PATH, replacePath)
-    .replace(RELATIVE_FILE_PATH, replacePath)
+    .replace(FILE_PATH, replacePath)
     .replace(/^[ \t]{0,3}(?:>[ \t]?)+/gm, "")
     .replace(/^[ \t]*(?:=+|-+|([*_-])(?:[ \t]*\1){2,})[ \t]*$/gm, "")
     .replace(/^[ \t]{0,3}#{1,6}(?:[ \t]+|$)/gm, "")
@@ -154,7 +165,7 @@ function cleanProse(lines: string[]) {
     .replace(/~~(\S(?:.*?\S)?)~~/g, "$1")
     .replace(/[,;:]\s*(?:[,;:]\s*)*([.!?]+)(?= |$)/g, "$1")
     .replace(/([:;]) +[.!?](?= |$)/g, "$1")
-    .replace(/ +([,.!?])/g, "$1")
+    .replace(/ +([,.!?])(?=\s|$)/g, "$1")
     .trim();
   return { spoken: /[\p{L}\p{N}]/u.test(spoken) ? spoken : "", droppedContent };
 }
