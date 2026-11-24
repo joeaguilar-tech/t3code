@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   cliArchiveFileName,
   cliArchiveTarCommand,
+  cliReleaseAssetUrl,
   cliReleaseDownloadBaseUrl,
   newestCliReleaseVersion,
   parseChecksums,
@@ -60,6 +61,9 @@ describe("cliRelease", () => {
     );
     expect(cliArchiveFileName(appVersion, "darwin-arm64")).toBe(
       `t3-${upstream}-darwin-arm64.tar.gz`,
+    );
+    expect(cliReleaseAssetUrl(appVersion, "SHA256SUMS")).toBe(
+      `https://github.com/pingdotgg/t3code/releases/download/v${upstream}/SHA256SUMS`,
     );
   });
 });
