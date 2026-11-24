@@ -24,10 +24,28 @@ describe("splitSpokenReply", () => {
     [
       "code, links, and a table",
       "See [the guide](https://example.com/a_(b)).\n\nUse this: `run`.\n\nName | Value\n--- | ---\nA | 1\n\n```sh\nrun\n```",
-      "See the guide. Use this: The rest is on your screen.",
+      "See the guide. Use this: run. The rest is on your screen.",
       true,
     ],
     ["code-only reply", "```ts\nconsole.log(42);\n```", "I've put it on your screen.", true],
+    [
+      "inline command between words",
+      "Use `git reset --soft HEAD~1` to undo the last commit.",
+      "Use the snippet on your screen to undo the last commit. The rest is on your screen.",
+      true,
+    ],
+    [
+      "single word in inline code",
+      "A JavaScript `Map` iterates keys in insertion order.",
+      "A JavaScript Map iterates keys in insertion order.",
+      false,
+    ],
+    [
+      "inline command before sentence punctuation",
+      "Run `git branch -a`. It lists all branches.",
+      "Run the snippet on your screen. It lists all branches. The rest is on your screen.",
+      true,
+    ],
     [
       "bare URL with sentence punctuation",
       "I opened https://example.com/pull/12. Please review it.",
