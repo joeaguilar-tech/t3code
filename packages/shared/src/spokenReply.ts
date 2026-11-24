@@ -1,6 +1,7 @@
 const SPOKEN_REPLY_MAX_LENGTH = 400;
 const SPOKEN_REPLY_REMAINDER = "The rest is on your screen.";
 const SPOKEN_REPLY_SCREEN_ONLY = "The answer is on your screen.";
+const SCREEN_MENTION = /\bscreen\b/i;
 
 const FALLBACK_SENTENCE_LIMIT = 3;
 const INLINE_WORD = /^[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)?$/u;
@@ -204,10 +205,11 @@ function formatReply(spoken: string, hasOnScreenPart: boolean) {
   if (!spoken) return { blurb: SPOKEN_REPLY_SCREEN_ONLY, hasOnScreenPart: true };
   if (!hasOnScreenPart) return { blurb: spoken, hasOnScreenPart: false };
 
-  const sentences = splitSentences(spoken).filter(
-    (sentence) => sentence !== SPOKEN_REPLY_REMAINDER,
-  );
+  const sentences = splitSentences(spoken).filter((sentence) => sentence !== SPOKEN_REPLY_REMAINDER);
   const content = sentences.join(" ");
+  if (content.length <= SPOKEN_REPLY_MAX_LENGTH && SCREEN_MENTION.test(sentences.at(-1) ?? "")) {
+    return { blurb: content, hasOnScreenPart: true };
+  }
   const budget = SPOKEN_REPLY_MAX_LENGTH - SPOKEN_REPLY_REMAINDER.length - 1;
   let excerpt = content;
   if (content.length > budget) {
@@ -220,6 +222,9 @@ function formatReply(spoken: string, hasOnScreenPart: boolean) {
     }
     const lastSpace = content.lastIndexOf(" ", budget);
     excerpt = complete.join(" ") || content.slice(0, lastSpace > 0 ? lastSpace : budget);
+    if (SCREEN_MENTION.test(complete.at(-1) ?? excerpt)) {
+      return { blurb: excerpt, hasOnScreenPart: true };
+    }
   }
   return {
     blurb: excerpt ? `${excerpt} ${SPOKEN_REPLY_REMAINDER}` : SPOKEN_REPLY_REMAINDER,
