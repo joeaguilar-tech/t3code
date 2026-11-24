@@ -67,6 +67,7 @@ function art(config: Awaited<ReturnType<typeof loadConfig>>) {
 }
 
 function identity(config: Awaited<ReturnType<typeof loadConfig>>) {
+  const widgets = pluginOptions(config, "expo-widgets");
   return {
     name: config.name,
     slug: config.slug,
@@ -78,7 +79,12 @@ function identity(config: Awaited<ReturnType<typeof loadConfig>>) {
     associatedDomains: config.ios?.associatedDomains,
     keychainGroups: config.ios?.entitlements?.["keychain-access-groups"],
     sharing: pluginOptions(config, "expo-sharing"),
-    widgets: pluginOptions(config, "expo-widgets"),
+    widgets: {
+      ...widgets,
+      widgets: widgets?.widgets.map(
+        ({ description: _description, ...widget }: { description: string }) => widget,
+      ),
+    },
     eas: config.extra?.eas,
     owner: config.owner,
     updates: config.updates,
@@ -179,6 +185,10 @@ it.each(["development", "preview", "production"])(
     const splash = `${root}/android-splash.png`;
 
     expect(identity(branded)).toEqual(identity(upstream));
+    expect(pluginOptions(branded, "./plugins/withWidgetLogoAsset.cjs")).toEqual({
+      sourcePath: "../../assets/fork/j3/widget-mark.svg",
+    });
+    expect(upstream.plugins).toContain("./plugins/withWidgetLogoAsset.cjs");
     expect(branded.extra).toMatchObject({ brand: "j3", stageLabel: "Local" });
     expect(art(branded)).toMatchObject({
       icon,
@@ -209,3 +219,37 @@ it.each(["development", "preview", "production"])(
     );
   },
 );
+
+it.each([
+  ["development", "T3 Code Dev"],
+  ["preview", "T3 Code Preview"],
+  ["production", "T3 Code"],
+])("guards the branded %s Expo config against upstream branding", async (variant, nativeName) => {
+  vi.stubEnv("T3CODE_IOS_PERSONAL_TEAM", undefined);
+  vi.stubEnv("T3CODE_IOS_DISPLAY_NAME", undefined);
+  const config = await loadConfig(variant, "j3");
+  const serialized = JSON.stringify(config, function (key, value) {
+    // Expo uses the root name for native targets and extension identity.
+    if (this === config && key === "name" && value === nativeName) return undefined;
+    // This prompt describes the upstream servers the app can connect to.
+    if (
+      this === config.ios?.infoPlist &&
+      key === "NSLocalNetworkUsageDescription" &&
+      value === "Allow J3 Code to connect to T3 Code servers on your local network or tailnet."
+    )
+      return undefined;
+    // This widget shows quotas from upstream environments, including on the fork.
+    const widget = pluginOptions(config, "expo-widgets")?.widgets[0];
+    if (
+      this === widget &&
+      key === "description" &&
+      value === "Subscription quotas from your connected T3 Code environments."
+    )
+      return undefined;
+    return value;
+  });
+  expect(serialized).not.toMatch(/T3 Code/u);
+  expect(serialized).not.toMatch(
+    /assets\/(?:prod\/|dev\/|nightly\/|android-|widget\/T3Mark\.svg)/u,
+  );
+});

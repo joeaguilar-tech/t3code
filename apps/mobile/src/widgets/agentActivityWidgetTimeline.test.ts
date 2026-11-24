@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { RelayAgentActivityAggregateState } from "@t3tools/contracts/relay";
@@ -7,6 +7,14 @@ import {
   AGENT_ACTIVITY_WIDGET_STALE_AFTER_MS,
   agentActivityWidgetTimeline,
 } from "./agentActivityWidgetTimeline";
+
+vi.mock("expo-constants", () => ({
+  default: {
+    get expoConfig() {
+      return { extra: { brand: process.env.T3CODE_BRAND } };
+    },
+  },
+}));
 
 const now = Date.parse("2026-10-18T10:00:00.000Z");
 
@@ -37,6 +45,19 @@ function aggregate(activities: ReadonlyArray<Row>): RelayAgentActivityAggregateS
 }
 
 describe("agentActivityWidgetTimeline", () => {
+  it.each([
+    [undefined, "T3 Code"],
+    ["j3", "J3 Code"],
+  ])("uses the mobile product name with brand %j", async (brand, title) => {
+    vi.resetModules();
+    vi.stubEnv("T3CODE_BRAND", brand);
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+    const { agentActivityWidgetTimeline } = await import("./agentActivityWidgetTimeline");
+    expect(agentActivityWidgetTimeline({ kind: "loading" }, now)[0]?.props.title).toBe(title);
+  });
+
   it("marks unfinished rows out of date once the widget can no longer vouch for them", () => {
     const timeline = agentActivityWidgetTimeline(
       {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveForkBrand } from "./forkBrand.ts";
+import { resolveAppActivityGlyph, resolveForkBrand } from "./forkBrand.ts";
 import { upstreamReleaseVersion } from "./forkVersion.ts";
 
 describe("fork brand", () => {
@@ -10,12 +10,20 @@ describe("fork brand", () => {
     }
   });
 
+  it.each([
+    [undefined, "t3-wordmark"],
+    ["j3", "terminal"],
+  ])("selects the app activity glyph for %s", (selection, glyph) => {
+    expect(resolveAppActivityGlyph(resolveForkBrand(selection))).toBe(glyph);
+  });
+
   it("selects the fork display name, notice, and assets", () => {
     const brand = resolveForkBrand("j3");
     expect(brand?.name).toBe("J3 Code");
     expect(brand?.statement).toBe(
       "J3 Code is an unofficial fork based on the T3 Code source code. It is not affiliated with, endorsed by, or maintained by T3 Tools, Inc.",
     );
+    expect(brand?.assets.mobile.widgetMarkSvg).toBe("assets/fork/j3/widget-mark.svg");
     expect(brand?.assets.source).toBe("assets/fork/j3/icon.svg");
   });
 
