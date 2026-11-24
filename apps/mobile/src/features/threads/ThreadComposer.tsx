@@ -1208,7 +1208,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 <ComposerDictationStartAction
                   size={usesLargeControls ? "large" : "regular"}
                   state={voiceInput.state}
-                  isAvailable={voiceInput.isAvailable && !props.voiceMode?.state}
+                  isAvailable={voiceInput.isAvailable && !props.voiceMode?.sessionLive}
                   disabled={isSubmissionLocked}
                   onStart={voiceInput.start}
                   onCancel={voiceInput.cancel}

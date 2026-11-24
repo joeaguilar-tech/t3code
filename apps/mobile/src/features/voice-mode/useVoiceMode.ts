@@ -225,6 +225,7 @@ export function useVoiceMode(input: {
 
   return {
     available,
+    sessionLive: liveOwner !== null,
     canStart,
     state: view?.state ?? null,
     placement: view?.placement ?? "inline",
