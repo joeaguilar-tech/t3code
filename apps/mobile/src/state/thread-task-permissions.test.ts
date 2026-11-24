@@ -1,8 +1,10 @@
 import {
   AuthOrchestrationOperateScope,
+  CommandId,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   MessageId,
+  OrchestrationV2DispatchCommandError,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -26,7 +28,13 @@ import {
   makeThreadRequestsResolvedAnnouncer,
   sendApprovalFeedback,
 } from "@t3tools/client-runtime/state/thread-requests";
-import { DateTime } from "effect";
+import {
+  VOICE_MODE_LISTEN_WINDOW_MS,
+  VOICE_MODE_SEND_FAILED_PHRASE,
+  VoiceModeController,
+  type VoiceModeMicrophone,
+} from "@t3tools/client-runtime/voice-input";
+import { Cause, DateTime } from "effect";
 import { AsyncResult, type Atom } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -44,6 +52,8 @@ const state = vi.hoisted(() => ({
   projection: null as OrchestrationV2ThreadProjection | null,
   pendingRequests: { approvals: [], userInputs: [] } as PendingThreadRequests,
   enqueue: vi.fn(async () => undefined),
+  startTurn: vi.fn(),
+  canPromoteToSteer: false,
   freshPending: false,
   compactModel: null as string | null,
   compactDueAt: "",
@@ -75,7 +85,7 @@ const state = vi.hoisted(() => ({
     modelSelection: { instanceId: "codex", model: "gpt-5.4" },
     runtimeMode: "full-access",
     interactionMode: "default",
-    runtime: null,
+    runtime: null as { status: string; activeRunId: string } | null,
     latestRun: null as unknown,
   },
 }));
@@ -142,7 +152,11 @@ vi.mock("./queued-run-edit", () => ({
 }));
 vi.mock("./preferences", async () => {
   const { Atom, AsyncResult } = await import("effect/reactivity");
-  return { mobilePreferencesAtom: Atom.make(AsyncResult.success({})) };
+  return {
+    mobilePreferencesAtom: Atom.make(
+      AsyncResult.success({ followUpBehavior: "steer" as "steer" | "queue" }),
+    ),
+  };
 });
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
 vi.mock("@effect/atom-react", async () => {
@@ -158,6 +172,7 @@ vi.mock("./use-thread-selection", () => ({
   useThreadSelection: () => ({
     selectedThread: state.thread,
     selectedThreadCreation: null,
+    selectedThreadDetailRef: state.canPromoteToSteer ? state.thread : undefined,
     selectedEnvironmentRuntime: {
       connectionState: state.connectionState,
       serverConfig: state.serverConfig,
@@ -175,7 +190,7 @@ vi.mock("./threads", async () => {
   const { Atom } = await import("effect/reactivity");
   return {
     environmentThreadDetails: {
-      queueWorkflowAtom: () => Atom.make(null),
+      queueWorkflowAtom: () => Atom.make({ canPromoteToSteer: state.canPromoteToSteer }),
       checkpointSummariesAtom: () => Atom.make([]),
       sequenceAtom: () => Atom.make(0),
       pendingRequestsAtom: () => Atom.make(state.pendingRequests),
@@ -184,6 +199,7 @@ vi.mock("./threads", async () => {
       respondToApproval: state.approve,
       respondToUserInput: state.answer,
       uploadFeedback: state.feedback,
+      startTurn: state.startTurn,
     },
   };
 });
@@ -244,6 +260,8 @@ vi.mock("../lib/copyTextWithHaptic", () => ({ copyTextWithHaptic: vi.fn() }));
 vi.mock("./use-remote-environment-registry", () => ({ setPendingConnectionError: vi.fn() }));
 
 import { Alert } from "react-native";
+import { appAtomRegistry } from "./atom-registry";
+import { mobilePreferencesAtom } from "./preferences";
 import { useThreadComposerState } from "./use-thread-composer-state";
 import { useSelectedThreadRequests } from "./use-selected-thread-requests";
 import { questionAttachmentDraftKey } from "./question-attachments";
@@ -267,6 +285,9 @@ beforeEach(() => {
   state.compactModel = null;
   state.compactDueAt = "";
   state.thread.latestRun = null;
+  state.thread.runtime = null;
+  state.canPromoteToSteer = false;
+  appAtomRegistry.set(mobilePreferencesAtom, AsyncResult.success({ followUpBehavior: "steer" }));
   state.projection = null;
   state.serverConfig = {
     providers: [{ instanceId: "codex", driver: "codex", enabled: true }],
@@ -287,6 +308,134 @@ beforeEach(() => {
   state.approve.mockResolvedValue(AsyncResult.success(undefined));
   state.answer.mockResolvedValue(AsyncResult.success(undefined));
   state.feedback.mockResolvedValue(AsyncResult.success({ feedbackId: "feedback" }));
+});
+
+describe("spoken composer sends", () => {
+  it.each([
+    { scenario: "Stop reached the run", status: "stopping", retryFails: false, queue: false },
+    {
+      scenario: "the run ended and the retry fails",
+      status: "interrupted",
+      retryFails: true,
+      queue: false,
+    },
+    { scenario: "follow-ups are queued", status: null, retryFails: false, queue: true },
+  ])("handles follow-ups when $scenario", async ({ status, retryFails, queue }) => {
+    state.grantedEnvironments.add("secondary");
+    state.pendingRequests = { approvals: [], userInputs: [] };
+    state.thread.runtime = { status: "running", activeRunId: "run" };
+    state.canPromoteToSteer = true;
+    appAtomRegistry.set(
+      mobilePreferencesAtom,
+      AsyncResult.success({ followUpBehavior: queue ? "queue" : "steer" }),
+    );
+    if (status !== null) {
+      const detail = `Target run run is ${status} and cannot be steered.`;
+      state.startTurn
+        .mockResolvedValueOnce(
+          AsyncResult.failure(
+            Cause.fail(
+              new OrchestrationV2DispatchCommandError({
+                commandId: CommandId.make("command"),
+                commandType: "message.dispatch",
+                message: detail,
+                detail,
+              }),
+            ),
+          ),
+        )
+        .mockResolvedValueOnce(
+          retryFails
+            ? AsyncResult.failure(Cause.fail(new Error("Send failed")))
+            : AsyncResult.success({ sequence: 1 }),
+        );
+    }
+
+    const { sendSpokenMessage } = useThreadComposerState(NO_SIDE_CHATS);
+    let receive: Parameters<VoiceModeMicrophone["open"]>[0] | undefined;
+    let capturing = false;
+    let speaking = false;
+    const timers = new Set<number>();
+    const speak = vi.fn(async (_text: string) => {
+      speaking = true;
+      checkMicrophone();
+      await Promise.resolve();
+      speaking = false;
+    });
+    const close = () => {
+      capturing = false;
+    };
+    const controller = new VoiceModeController({
+      microphone: {
+        open(callback) {
+          expect(speaking).toBe(false);
+          capturing = true;
+          receive = callback;
+        },
+        finish: close,
+        cancel: close,
+      },
+      speech: { speak, stopSpeaking: vi.fn() },
+      sendSpokenMessage,
+      timer: {
+        schedule(delay) {
+          timers.add(delay);
+          return () => timers.delete(delay);
+        },
+      },
+      toSpeech: (text) => text,
+    });
+    function checkMicrophone() {
+      const snapshot = controller.currentState;
+      expect(snapshot.microphoneOpen).toBe(capturing);
+      if (capturing) {
+        expect(speaking).toBe(false);
+        expect(snapshot.manuallyMuted).toBe(false);
+        expect(timers.has(VOICE_MODE_LISTEN_WINDOW_MS)).toBe(true);
+      }
+    }
+    controller.subscribe(checkMicrophone);
+    controller.start();
+    checkMicrophone();
+    await controller.handleRunEvent({ type: "running" });
+    checkMicrophone();
+    controller.cancelTurn();
+    checkMicrophone();
+    expect(receive).toBeDefined();
+    close();
+    const sending = receive?.("spoken follow-up");
+    checkMicrophone();
+    await sending;
+    checkMicrophone();
+
+    if (queue) {
+      expect(state.startTurn).not.toHaveBeenCalled();
+      expect(state.enqueue).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ dispatchMode: "queue" }),
+      );
+    } else {
+      expect(state.enqueue).not.toHaveBeenCalled();
+      expect(state.startTurn.mock.calls.map(([request]) => request.input.dispatchMode)).toEqual([
+        "steer",
+        "start",
+      ]);
+      expect(state.startTurn.mock.calls[1]?.[0].input.commandId).not.toBe(
+        state.startTurn.mock.calls[0]?.[0].input.commandId,
+      );
+      expect(state.startTurn.mock.calls[1]?.[0].input.message).toEqual(
+        state.startTurn.mock.calls[0]?.[0].input.message,
+      );
+    }
+    await controller.handleRunEvent({
+      type: "finished",
+      finalMessage: "Reply",
+      handledMessageIds: ["message"],
+    });
+    checkMicrophone();
+    expect(speak).toHaveBeenCalledExactlyOnceWith(
+      retryFails ? VOICE_MODE_SEND_FAILED_PHRASE : "Reply",
+    );
+  });
 });
 
 describe("mobile task permissions", () => {

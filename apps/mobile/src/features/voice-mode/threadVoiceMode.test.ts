@@ -101,7 +101,7 @@ describe("spoken dispatch", () => {
 
   it("steers by default and queues when configured or unable to steer", () => {
     const input = { text: "hello", running: true, canSteer: true };
-    expect(buildSpokenSend(input).dispatchMode).toBe("auto");
+    expect(buildSpokenSend(input).dispatchMode).toBe("steer");
     expect(buildSpokenSend({ ...input, followUpBehavior: "queue" }).dispatchMode).toBe("queue");
     expect(buildSpokenSend({ ...input, canSteer: false }).dispatchMode).toBe("queue");
   });
